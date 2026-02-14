@@ -23,6 +23,7 @@ export interface Patient {
   risk_score: number | null;
   risk_label: string | null;
   explanation: string | null;
+  department?: string | null;  // Added field
   created_at: string;
 }
 
