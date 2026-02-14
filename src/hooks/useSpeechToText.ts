@@ -1,73 +1,71 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useCallback } from "react";
+import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
+import "regenerator-runtime/runtime";
 
 interface UseSpeechToTextProps {
     onResult: (text: string) => void;
     continuous?: boolean;
 }
 
-export const useSpeechToText = ({ onResult, continuous = false }: UseSpeechToTextProps) => {
-    const [isListening, setIsListening] = useState(false);
-    const recognitionRef = useRef<any>(null);
+export const useSpeechToText = ({ onResult, continuous = true }: UseSpeechToTextProps) => {
+    const {
+        transcript,
+        finalTranscript,
+        resetTranscript,
+        listening,
+        browserSupportsSpeechRecognition,
+        isMicrophoneAvailable
+    } = useSpeechRecognition();
 
     useEffect(() => {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        console.log("Speech State Update:", {
+            listening,
+            browserSupportsSpeechRecognition,
+            isMicrophoneAvailable,
+            transcript,
+            finalTranscript
+        });
+    }, [listening, browserSupportsSpeechRecognition, isMicrophoneAvailable, transcript, finalTranscript]);
 
-        if (!SpeechRecognition) {
-            console.warn("Web Speech API not supported.");
-            return;
+    useEffect(() => {
+        if (!browserSupportsSpeechRecognition) {
+            console.error("Browser does not support Speech Recognition!");
         }
+        if (!isMicrophoneAvailable) {
+            console.warn("Microphone is not available (permission denied or missing).");
+        }
+    }, [browserSupportsSpeechRecognition, isMicrophoneAvailable]);
 
-        const recognition = new SpeechRecognition();
-        recognition.continuous = continuous;
-        // We strictly use final results to prevent duplication loops in the current architecture.
-        // If we want real-time preview, we'd need separate state for interim results in the consumer.
-        recognition.interimResults = false;
-        recognition.lang = "en-US";
 
-        let resultIndex = 0;
-
-        recognition.onstart = () => setIsListening(true);
-        recognition.onend = () => setIsListening(false);
-
-        recognition.onresult = (event: any) => {
-            // Only process new results we haven't seen yet
-            for (let i = resultIndex; i < event.results.length; i++) {
-                const result = event.results[i];
-                if (result.isFinal) {
-                    const transcript = result[0].transcript.trim();
-                    if (transcript) {
-                        onResult(transcript);
-                    }
-                    resultIndex = i + 1; // Advance our pointer
-                }
-            }
-        };
-
-        recognitionRef.current = recognition;
-
-        return () => {
-            if (recognitionRef.current) recognitionRef.current.stop();
-        };
-    }, [onResult, continuous]);
+    useEffect(() => {
+        if (finalTranscript !== "") {
+            console.log("Voice Result:", finalTranscript);
+            onResult(finalTranscript);
+            resetTranscript();
+        }
+    }, [finalTranscript, onResult, resetTranscript]);
 
     const startListening = useCallback(() => {
-        if (recognitionRef.current) {
-            try {
-                recognitionRef.current.start();
-            } catch (e) {
-                console.error("Mic start error:", e);
-            }
-        }
-    }, []);
+        console.log("Starting listening...", { continuous });
+        SpeechRecognition.startListening({ continuous, language: "en-US" });
+    }, [continuous]);
 
     const stopListening = useCallback(() => {
-        if (recognitionRef.current) recognitionRef.current.stop();
+        console.log("Stopping listening...");
+        SpeechRecognition.stopListening();
     }, []);
 
     const toggleListening = useCallback(() => {
-        if (isListening) stopListening();
-        else startListening();
-    }, [isListening, startListening, stopListening]);
+        if (listening) {
+            stopListening();
+        } else {
+            startListening();
+        }
+    }, [listening, startListening, stopListening]);
 
-    return { isListening, toggleListening, hasSupport: !!recognitionRef.current };
+    return {
+        isListening: listening,
+        toggleListening,
+        hasSupport: browserSupportsSpeechRecognition
+    };
 };
