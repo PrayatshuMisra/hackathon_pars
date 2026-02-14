@@ -6,9 +6,10 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.metrics import r2_score, mean_absolute_error
 from keras import models, layers, callbacks
+import joblib
 
 # 1. Load Data
-file_path = r"D:\codes\Datasets\patients_data_new_big.csv"
+file_path = r"D:\codes\Datasets\patients_data_final_v3.csv"
 try:
     df = pd.read_csv(file_path)
     print("Dataset loaded successfully.")
@@ -51,25 +52,14 @@ model = models.Sequential()
 
 # --- Input Layer ---
 model.add(layers.Dense(64, activation='relu', input_dim=X_train_scaled.shape[1]))
-
 # --- Hidden Layers with Dropout ---
 model.add(layers.Dropout(0.2)) # Randomly drop 20% of neurons to prevent overfitting
+model.add(layers.Dense(64, activation='tanh'))
+model.add(layers.Dropout(0.3))
+model.add(layers.Dense(64, activation='tanh'))
+model.add(layers.Dropout(0.3)) # Randomly drop 20% of neurons to prevent overfitting
 model.add(layers.Dense(32, activation='relu'))
 model.add(layers.Dropout(0.2))
-
-# --- Input Layer ---
-model.add(layers.Dense(32, activation='tanh', input_dim=X_train_scaled.shape[1]))
-
-# --- Hidden Layers with Dropout ---
-model.add(layers.Dropout(0.2)) # Randomly drop 20% of neurons to prevent overfitting
-model.add(layers.Dense(32, activation='relu'))
-model.add(layers.Dropout(0.2))
-
-# --- Input Layer ---
-model.add(layers.Dense(64, activation='relu', input_dim=X_train_scaled.shape[1]))
-
-# --- Hidden Layers with Dropout ---
-model.add(layers.Dropout(0.2)) # Randomly drop 20% of neurons to prevent overfitting
 model.add(layers.Dense(32, activation='relu'))
 model.add(layers.Dropout(0.2))
 
@@ -86,7 +76,7 @@ model.add(layers.Dense(1, activation='sigmoid'))
 model.compile(
     optimizer='adam',
     loss='mean_squared_error',  # Standard loss for regression
-    metrics=['mae']             # Mean Absolute Error (easy to interpret)
+    metrics=['mae']             # Mean Squared Error 
 )
 
 # ==============================================================================
@@ -134,3 +124,10 @@ predicted_val = y_pred[0][0]
 print(f"Actual Risk Score:    {actual_val:.4f}")
 print(f"Predicted Risk Score: {predicted_val:.4f}")
 print(f"Difference:           {abs(actual_val - predicted_val):.4f}")
+
+model.save(r'D:\codes\hackathon_chennai\triage_model_nn.keras')
+print("\n✅ Keras Model saved as 'triage_model_nn.keras'")
+ 
+# B. Save the Preprocessor (MUST do this to scale new data later)
+joblib.dump(preprocessor, r'D:\codes\hackathon_chennai\preprocessor_nn.pkl')
+print("✅ Preprocessor saved as 'preprocessor_nn.pkl'")
