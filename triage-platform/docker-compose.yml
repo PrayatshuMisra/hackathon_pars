@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: triage_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: triage_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - triage-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: triage_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - triage-net
+
+networks:
+  triage-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
