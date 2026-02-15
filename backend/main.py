@@ -12,6 +12,9 @@ from ml_service import TriageModel
 from fastapi import FastAPI, UploadFile, File
 from doc_parser import extract_vitals_from_pdf
 from dept_service import get_referral, get_department
+from audio_service import AudioService
+import os
+import shutil
 
 app = FastAPI(title="PARS Triage API", version="1.0.0")
 
@@ -38,6 +41,13 @@ try:
 except Exception as e:
     print(f"[PARS] WARNING: Could not load model: {e}")
     model = None
+
+# Load Audio Service
+try:
+    audio_service = AudioService()
+except Exception as e:
+    print(f"[PARS] Audio Service Error: {e}")
+    audio_service = None
 
 
 class PatientInput(BaseModel):
@@ -72,17 +82,53 @@ def health():
 
 @app.post("/predict", response_model=TriageResponse)
 def predict(patient: PatientInput):
+    # Fallback mode: Use rule-based risk assessment if ML model isn't loaded
     if model is None:
-        raise HTTPException(status_code=503, detail="Model not loaded. Place model files in backend/ directory.")
-
-    # 1. Get ML Prediction & Risk Analysis
-    result = model.predict(patient.dict())
+        print("[PARS] WARNING: Using fallback mode (ML model not available)")
+        # Simple rule-based risk assessment
+        hr = patient.Heart_Rate
+        systolic = patient.Systolic_BP
+        o2 = patient.O2_Saturation
+        gcs = patient.GCS_Score
+        
+        # Determine risk based on critical thresholds
+        critical_reasons = []
+        if hr > 180 or hr < 40:
+            critical_reasons.append("Abnormal heart rate")
+        if systolic < 70:
+            critical_reasons.append("Severe hypotension")
+        if o2 < 85:
+            critical_reasons.append("Critical hypoxia")
+        if gcs <= 8:
+            critical_reasons.append("Reduced consciousness")
+        
+        if critical_reasons:
+            risk_score = 0.95
+            risk_label = "HIGH"
+            details = "⚠️ Critical vitals detected: " + ", ".join(critical_reasons)
+        elif hr > 100 or systolic < 90 or o2 < 94:
+            risk_score = 0.55
+            risk_label = "MEDIUM"
+            details = "Elevated vitals requiring attention"
+        else:
+            risk_score = 0.15
+            risk_label = "LOW"
+            details = "Vitals within acceptable range"
+        
+        result = {
+            "risk_score": risk_score,
+            "risk_label": risk_label,
+            "details": details
+        }
+    else:
+        # Use ML model if available
+        result = model.predict(patient.dict())
     
     # 2. Determine Referral Logic
-    # Use Chief Complaint if provided, otherwise fallback to the generated "details" (Why?)
+    # Use Chief Complaint if provided, otherwise fallback to the generated "details"
     referral_reason = patient.Chief_Complaint if patient.Chief_Complaint else result["details"]
     
-    # 3. Get Department & Doctor List
+    # 3. Get Department & Doctor List (THIS IS THE KEY PART - NLP DEPARTMENT CLASSIFICATION)
     referral_data = get_referral(referral_reason)
     
     # 4. Merge Results
@@ -131,6 +177,30 @@ async def parse_document(file: UploadFile = File(...)):
         "filename": file.filename,
         "data": extracted_data
     }
+
+@app.post("/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    """
+    Accepts audio file (wav/webm/mp3), uses Whisper to transcribe.
+    """
+    if not audio_service:
+        raise HTTPException(status_code=503, detail="Audio service unavailable.")
+    
+    # Save temp file
+    temp_filename = f"temp_{file.filename}"
+    try:
+        with open(temp_filename, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        text = audio_service.transcribe(temp_filename)
+        return {"text": text}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Cleanup
+        if os.path.exists(temp_filename):
+            os.remove(temp_filename)
 
 
 if __name__ == "__main__":
