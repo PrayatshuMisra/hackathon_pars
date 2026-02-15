@@ -97,7 +97,8 @@ export default function TriageForm({ onSubmit, loading }: Props) {
     formData.append("file", file);
 
     try {
-      const response = await axios.post("http://localhost:8000/parse-document", formData, {
+      const API_URL = import.meta.env.VITE_FASTAPI_URL || "http://localhost:8000";
+      const response = await axios.post(`${API_URL}/parse-document`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
