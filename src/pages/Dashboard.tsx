@@ -58,6 +58,7 @@ export default function Dashboard() {
   const [simActive, setSimActive] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [sortOrder, setSortOrder] = useState<"priority" | "recent" | "old">("priority"); // Sort by risk priority by default
   
   // Refs for logic
   const simActiveRef = useRef(false);
@@ -206,6 +207,29 @@ export default function Dashboard() {
     i18n.changeLanguage(lng);
   };
 
+  // Sort patients by risk priority or arrival time
+  const sortedPatients = [...activePatients].sort((a, b) => {
+    if (sortOrder === "priority") {
+      // Sort by risk level: HIGH > MEDIUM > LOW
+      const riskOrder = { "HIGH": 0, "MEDIUM": 1, "LOW": 2 };
+      const riskA = riskOrder[a.risk_label as keyof typeof riskOrder] ?? 3;
+      const riskB = riskOrder[b.risk_label as keyof typeof riskOrder] ?? 3;
+      return riskA - riskB;
+    } else {
+      // Sort by arrival time
+      const timeA = new Date(a.created_at || 0).getTime();
+      const timeB = new Date(b.created_at || 0).getTime();
+      return sortOrder === "recent" ? timeB - timeA : timeA - timeB;
+    }
+  });
+
+  // Toggle sort order: priority -> recent -> old -> priority
+  const toggleSort = () => {
+    if (sortOrder === "priority") setSortOrder("recent");
+    else if (sortOrder === "recent") setSortOrder("old");
+    else setSortOrder("priority");
+  };
+
   return (
     <div className="flex h-screen flex-col text-foreground font-sans selection:bg-primary/20 p-4 gap-4 overflow-hidden">
       
@@ -287,6 +311,19 @@ export default function Dashboard() {
                 {simActive && <Zap className="h-3 w-3 animate-pulse text-green-500" />}
               </div>
               <Button
+                size="sm"
+                variant="ghost"
+                onClick={toggleSort}
+                className="hover:bg-primary/20 hover:text-primary rounded-lg text-xs px-2 py-1 h-7"
+                title={
+                  sortOrder === "priority" ? "Sorted by Risk Priority (HIGH→MEDIUM→LOW)" :
+                  sortOrder === "recent" ? "Sorted by Time (Newest First)" :
+                  "Sorted by Time (Oldest First)"
+                }
+              >
+                {sortOrder === "priority" ? "Priority" : sortOrder === "recent" ? "Recent" : "Old"}
+              </Button>
+              <Button
                 size="icon"
                 variant="ghost"
                 onClick={() => setActiveTab("intake")}
@@ -299,7 +336,7 @@ export default function Dashboard() {
 
           <div className="flex-1 overflow-hidden">
             <PatientQueue
-              patients={activePatients}
+              patients={sortedPatients}
               selectedId={null}
               onSelect={handleSelectPatient}
             />
