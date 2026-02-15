@@ -305,7 +305,7 @@ export default function PatientIntake() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col items-center justify-center p-4 z-10 overflow-hidden bg-dot-pattern">
+      <main className="flex-1 flex flex-col items-center justify-center p-4 z-10 bg-dot-pattern overflow-y-auto">
         
         <AnimatePresence mode="wait">
           
