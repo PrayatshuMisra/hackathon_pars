@@ -23,7 +23,8 @@ class TriageModel:
             model_full_path = os.path.join(base_dir, model_path)
             preprocessor_full_path = os.path.join(base_dir, preprocessor_path)
 
-            self.model = tf.keras.models.load_model(model_full_path)
+            # Load model with compile=False to bypass optimizer/loss compatibility issues
+            self.model = tf.keras.models.load_model(model_full_path, compile=False)
             self.preprocessor = joblib.load(preprocessor_full_path)
             print(f"[PARS] Model loaded from {model_full_path}. Input shape: {self.model.input_shape}")
         except Exception as e:

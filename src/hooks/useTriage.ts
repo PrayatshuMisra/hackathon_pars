@@ -46,6 +46,7 @@ export function useTriage() {
 
   const predict = async (data: PatientInput): Promise<TriageResult | null> => {
     setLoading(true);
+    setResult(null); // Clear previous result to avoid "flash" of old data
     setError(null);
     try {
       const res = await fetch(`${API_BASE_URL}/predict`, {

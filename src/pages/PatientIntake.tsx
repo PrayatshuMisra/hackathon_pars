@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -85,6 +85,8 @@ export default function PatientIntake() {
   };
 
   const [extractedData, setExtractedData] = useState<Partial<PatientInput>>({});
+  const submitFormRef = useRef<(() => void) | null>(null);
+
 
   // --- REAL VOICE LOGIC ---
   const handleVoiceResult = (text: string) => {
@@ -103,8 +105,17 @@ export default function PatientIntake() {
     setExtractedData(prev => ({ ...prev, ...others }));
   };
 
-  const { isListening, toggleListening, hasSupport } = useSpeechToText({ 
-    onResult: handleVoiceResult, 
+  const handleVoiceCommand = (command: "stop" | "submit") => {
+    if (command === "submit" && submitFormRef.current) {
+      // Trigger form submission via ref
+      submitFormRef.current();
+    }
+    // "stop" command just stops listening, handled by the hook
+  };
+
+  const { isListening, isProcessing, toggleListening, mode, setMode, keyboardHintVisible, hasSupport } = useSpeechToText({ 
+    onResult: handleVoiceResult,
+    onCommand: handleVoiceCommand,
     continuous: true 
   });
 
@@ -250,8 +261,29 @@ export default function PatientIntake() {
     setStep("result");
   };
 
+  // Store submit function in ref for voice command access
+  useEffect(() => {
+    submitFormRef.current = () => {
+      const submitEvent = new Event("submit", { bubbles: true, cancelable: true });
+      const formElement = document.querySelector("form");
+      if (formElement) {
+        formElement.dispatchEvent(submitEvent);
+      }
+    };
+  }, []);
+
   return (
     <div className="flex h-dvh flex-col text-foreground font-sans selection:bg-primary/20 overflow-hidden relative">
+      {/* Keyboard Shortcut Hint Overlay */}
+      {keyboardHintVisible && (
+        <div className="fixed top-4 right-4 z-50 bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-lg border border-primary/20 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <kbd className="px-2 py-1 bg-primary-foreground/20 rounded text-xs font-mono">Right Alt</kbd>
+            <span>{isListening ? "⏹️ Stopped" : "🎤 Started"}</span>
+          </div>
+        </div>
+      )}
+
 
       {/* Header */}
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card/50 px-6 backdrop-blur-md z-10">
@@ -336,20 +368,58 @@ export default function PatientIntake() {
                         </Label>
                       </div>
 
-                      {/* VOICE INPUT */}
+                      {/* VOICE INPUT WITH MODE SELECTOR */}
                       {hasSupport && (
-                        <button
-                          type="button"
-                          onClick={toggleListening}
-                          className={`flex items-center gap-2 h-8 px-3 rounded-md border transition-all text-xs font-medium shadow-sm ${
-                            isListening 
-                              ? "bg-red-500/10 border-red-500 text-red-500 animate-pulse" 
-                              : "bg-background border-border hover:border-primary/50"
-                          }`}
-                        >
-                          {isListening ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3 text-primary" />}
-                          {isListening ? t('intake.listening') : t('intake.dictate')}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {/* Voice Mode Selector */}
+                          <select
+                            value={mode}
+                            onChange={(e) => setMode(e.target.value as any)}
+                            className="h-8 px-2 rounded-md bg-background border border-border text-xs font-medium shadow-sm hover:border-primary/50 transition-all"
+                            disabled={isListening || isProcessing}
+                          >
+                            <option value="web">🌐 Web Speech</option>
+                            <option value="whisper">🎙️ Whisper AI</option>
+                          </select>
+
+                          {/* Voice Button */}
+                          <button
+                            type="button"
+                            onClick={toggleListening}
+                            disabled={isProcessing}
+                            className={`flex items-center gap-2 h-8 px-3 rounded-md border transition-all text-xs font-medium shadow-sm relative ${
+                              isListening 
+                                ? "bg-red-500/10 border-red-500 text-red-500 animate-pulse" 
+                                : isProcessing
+                                ? "bg-blue-500/10 border-blue-500 text-blue-500"
+                                : "bg-background border-border hover:border-primary/50"
+                            }`}
+                          >
+                            {isProcessing ? (
+                              <>
+                                <div className="h-3 w-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                Processing...
+                              </>
+                            ) : isListening ? (
+                              <>
+                                <Mic className="h-3 w-3" />
+                                {t('intake.listening')}
+                              </>
+                            ) : (
+                              <>
+                                <MicOff className="h-3 w-3 text-primary" />
+                                {t('intake.dictate')}
+                              </>
+                            )}
+                          </button>
+
+                          {/* Voice Commands Hint */}
+                          {isListening && (
+                            <div className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-1 rounded-md border border-border">
+                              Say: <span className="font-bold text-primary">"stop"</span> or <span className="font-bold text-primary">"submit"</span>
+                            </div>
+                          )}
+                        </div>
                       )}
                    </div>
                 </div>
