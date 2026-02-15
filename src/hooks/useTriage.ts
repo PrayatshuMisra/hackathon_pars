@@ -36,6 +36,7 @@ export interface TriageResult {
   risk_label: string;
   details: string;
   referral?: ReferralData;
+  isSelfCheckIn?: boolean;
 }
 
 export function useTriage() {
