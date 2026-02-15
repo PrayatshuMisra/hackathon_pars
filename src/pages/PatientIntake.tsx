@@ -58,7 +58,7 @@ interface HospitalData {
 export default function PatientIntake() {
   const { t } = useTranslation();
   const { predict, loading, result, setResult } = useTriage();
-  const [step, setStep] = useState<"form" | "result">("form");
+  const [step, setStep] = useState<"form" | "result" | "self-check-in">("form");
   
   const [form, setForm] = useState<SimpleFormState>({
     name: "",
@@ -145,11 +145,10 @@ export default function PatientIntake() {
     toast.warning("Dialing Emergency Services...", { duration: 2000 });
   };
 
-  // --- REAL HOSPITAL LOCATOR LOGIC (Global Support) ---
-  const [nearestHospital, setNearestHospital] = useState<HospitalData | null>(null);
-  const [locating, setLocating] = useState(false);
+   const [nearestHospital, setNearestHospital] = useState<HospitalData | null>(null);
+   const [locating, setLocating] = useState(false);
 
-  useEffect(() => {
+   useEffect(() => {
     if (step === "result" && !nearestHospital) {
       setLocating(true);
       
@@ -159,44 +158,52 @@ export default function PatientIntake() {
         return;
       }
 
-      setSendingSms(true);
-      try {
-         const { error } = await supabase.functions.invoke('send-emergency-sms', {
-            body: {
-               to: form.emergencyPhone,
-               patient: form.name || "A Patient",
-               location: "PARS Kiosk #4"
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          
+          try {
+            // Create a Dynamic "Bounding Box" (~20km radius)
+            const offset = 0.2; 
+            const minLon = longitude - offset;
+            const maxLon = longitude + offset;
+            const minLat = latitude - offset;
+            const maxLat = latitude + offset;
+
+            // Query OpenStreetMap (Nominatim)
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/search?format=json&q=hospital&limit=1&viewbox=${minLon},${maxLat},${maxLon},${minLat}&bounded=1`
+            );
+            const data = await response.json();
+
+            if (data && data.length > 0) {
+              const hospital = data[0];
+              setNearestHospital({
+                name: hospital.name || "Local Emergency Center",
+                lat: hospital.lat,
+                lon: hospital.lon,
+                address: hospital.display_name
+              });
+              toast.success("Nearest Facility Located", { description: hospital.name });
+            } else {
+               // Fallback to generic location if API fails to find "hospital"
+               setNearestHospital({
+                 name: "Emergency Services",
+                 lat: latitude.toString(),
+                 lon: longitude.toString(),
+                 address: "Detected Location (Facility Data Unavailable)"
+               });
+               toast.info("Location Detected", { description: "Map centered on your position." });
             }
-         });
-
-         if (error) throw error;
-         toast.success("SMS Alert Sent", { description: `Notification sent to ${form.emergencyPhone}` });
-
-      } catch (err) {
-         const message = `EMERGENCY ALERT: ${form.name || "The patient"} is currently at the hospital kiosk requesting assistance.`;
-         window.open(`sms:${form.emergencyPhone}?body=${encodeURIComponent(message)}`, '_self');
-         toast.info("Opening SMS App", { description: "Using device messenger as fallback." });
-      } finally {
-         setSendingSms(false);
-      }
-   };
-
-   // --- REAL AMBULANCE LOGIC ---
-   const handleCallAmbulance = () => {
-      window.location.href = "tel:108";
-      toast.warning("Dialing Emergency Services...", { duration: 2000 });
-   };
-
-   // --- REAL HOSPITAL LOCATOR LOGIC (Global Support) ---
-   const [nearestHospital, setNearestHospital] = useState<HospitalData | null>(null);
-   const [locating, setLocating] = useState(false);
-
-   useEffect(() => {
-      if (step === "result" && !nearestHospital) {
-         setLocating(true);
-
-         if (!navigator.geolocation) {
-            toast.error("Geolocation not supported by this browser.");
+          } catch (error) {
+            console.error("Map Error:", error);
+            setNearestHospital({
+              name: "Emergency Services",
+              lat: latitude.toString(),
+              lon: longitude.toString(),
+              address: "Detected Location (Map Data Unavailable)"
+            });
+          } finally {
             setLocating(false);
           }
         },
@@ -555,39 +562,10 @@ export default function PatientIntake() {
                  >
                    <ChevronLeft className="h-4 w-4" /> {t('intake.new_checkin')}
                  </Button>
-               </div>
-            </div>
+      </div>
 
-            <Link to="/login">
-               <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                  <ChevronLeft className="mr-2 h-4 w-4" /> Back to Staff Login
-               </Button>
-            </Link>
-         </header>
 
-         {/* Main Content Area */}
-         <main className="flex-1 flex flex-col items-center justify-center p-4 z-10 overflow-hidden bg-dot-pattern">
 
-            <AnimatePresence mode="wait">
-
-               {/* --- VIEW 1: INTAKE FORM --- */}
-               {step === "form" && (
-                  <motion.div
-                     key="form"
-                     initial={{ opacity: 0, y: 10 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     exit={{ opacity: 0, y: -10 }}
-                     className="w-full max-w-3xl flex flex-col h-full md:h-auto md:max-h-[85vh]"
-                  >
-                     <div className="rounded-2xl border border-border bg-card/80 shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col h-full md:h-auto">
-
-                        {/* 1. AUTO-FILL TOOLBAR */}
-                        <div className="bg-muted/30 border-b border-border p-3 flex items-center justify-between gap-4">
-                           <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground ml-2">Quick Fill Options:</span>
-                           </div>
-
-               <div className="flex-1 overflow-y-auto px-1">
                   <div className="flex flex-col gap-6 max-w-4xl mx-auto pb-10">
                       
                       {/* 1. RECOMMENDED DEPARTMENT CARD */}
@@ -605,125 +583,8 @@ export default function PatientIntake() {
                          </div>
                       </div>
 
-                      {/* 2. REAL HOSPITAL MAP SECTION */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-[300px]">
-                         
-                         {/* INFO CARD */}
-                         <div className="rounded-xl border border-border bg-card/60 p-6 flex flex-col justify-between">
-                            <div>
-                               <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2 mb-4">
-                                  <MapPin className="h-4 w-4 text-primary" /> {t('intake.nearest_facility')}
-                               </h3>
-                               {locating ? (
-                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                     <Loader2 className="h-4 w-4 animate-spin" /> {t('intake.locating')}
-                                  </div>
-                               ) : nearestHospital ? (
-                                  <div className="space-y-2">
-                                     <h2 className="text-xl font-bold text-foreground leading-tight">
-                                        {nearestHospital.name}
-                                     </h2>
-                                     <p className="text-xs text-muted-foreground line-clamp-3">
-                                        {nearestHospital.address}
-                                     </p>
-                                  </div>
-                               ) : (
-                                  <p className="text-sm text-muted-foreground">{t('intake.location_unavailable')}</p>
-                               )}
-                            </div>
 
-                            <Button 
-                               className="w-full gap-2 mt-4" 
-                               disabled={!nearestHospital}
-                               onClick={() => {
-                                  if (nearestHospital) {
-                                     // Open Real Google Maps Navigation
-                                     window.open(`https://www.google.com/maps/dir/?api=1&destination=${nearestHospital.lat},${nearestHospital.lon}`, '_blank');
-                                  }
-                               }}
-                            >
-                               <Navigation className="h-4 w-4" /> {t('intake.navigate')}
-                            </Button>
-                         </div>
-
-                         {/* MAP EMBED */}
-                         <div className="rounded-xl border border-border bg-black/10 overflow-hidden relative">
-                            {nearestHospital ? (
-                               <iframe
-                                  width="100%"
-                                  height="100%"
-                                  frameBorder="0"
-                                  scrolling="no"
-                                  marginHeight={0}
-                                  marginWidth={0}
-                                  // Using OpenStreetMap Embed (Free & Real) based on detected Lat/Lon
-                                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${parseFloat(nearestHospital.lon)-0.01}%2C${parseFloat(nearestHospital.lat)-0.01}%2C${parseFloat(nearestHospital.lon)+0.01}%2C${parseFloat(nearestHospital.lat)+0.01}&layer=mapnik&marker=${nearestHospital.lat}%2C${nearestHospital.lon}`}
-                                  className="w-full h-full opacity-80 hover:opacity-100 transition-opacity"
-                               ></iframe>
-                            ) : (
-                               <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
-                                  {locating ? t('intake.acquiring_gps') : t('intake.map_unavailable')}
-                               </div>
-                            )}
-                         </div>
-                      </div>
-
-                      {/* 3. EMERGENCY ACTIONS ROW */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         {/* CALL AMBULANCE */}
-                         <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 flex items-center gap-4">
-                            <div className="h-12 w-12 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
-                               <Ambulance className="h-6 w-6 text-red-500" />
-                            </div>
-                            <div>
-                               <h4 className="font-bold text-red-500">{t('intake.call_ambulance')}</h4>
-                               <p className="text-xs text-red-400/80 mb-2">{t('intake.dispatch_desc')}</p>
-                               <Button size="sm" variant="destructive" className="w-full bg-red-500 hover:bg-red-600" onClick={handleCallAmbulance}>
-                                  {t('intake.call_btn')}
-                               </Button>
-                            </div>
-                         </div>
-
-                         {/* NOTIFY CONTACT */}
-                         <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 flex items-center gap-4">
-                            <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
-                               <Phone className="h-6 w-6 text-blue-500" />
-                            </div>
-                            <div className="flex-1">
-                               <h4 className="font-bold text-blue-500">{t('intake.notify_contact')}</h4>
-                               <p className="text-xs text-blue-400/80 mb-2">{form.emergencyName || "Family/Friend"}</p>
-                               <Button size="sm" variant="default" className="w-full bg-blue-500 hover:bg-blue-600" onClick={handleSendSMS} disabled={sendingSms}>
-                                  {sendingSms ? <Loader2 className="h-3 w-3 animate-spin" /> : t('intake.send_sms')}
-                               </Button>
-                            </div>
-                         </div>
-                      </div>
-
-                      {/* 4. WEARABLE (Dummy) */}
-                      {/* 4. WEARABLE (Dummy) */}
-                      {!wearableConnected ? (
-                         <div className="rounded-xl border border-dashed border-border bg-black/5 p-6 flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                               <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center"><Activity className="h-5 w-5 text-primary" /></div>
-                               <div><h4 className="font-bold text-sm">{t('intake.wearable')}</h4><p className="text-xs text-muted-foreground">{t('intake.sync_desc')}</p></div>
-                            </div>
-                            <Button size="sm" onClick={handleConnectWearable} disabled={connecting}>{connecting ? t('intake.connecting') : t('intake.connect')}</Button>
-                         </div>
-                      ) : (
-                        <motion.div 
-                           initial={{ opacity: 0, scale: 0.95 }}
-                           animate={{ opacity: 1, scale: 1 }}
-                           className="space-y-2"
-                        >  
-                           <div className="flex items-center justify-between px-2">
-                              <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                                 <Activity className="h-4 w-4 text-green-500" /> {t('intake.live_vitals')}
-                              </h3>
-                              <span className="text-[10px] font-mono text-green-500 animate-pulse">● LIVE</span>
-                           </div>
-
-                           {/* 2. DYNAMIC CONTENT: MAP vs DOCTORS */}
-                           {(result as any).isSelfCheckIn ? (
+                           {result.isSelfCheckIn ? (
                               <div className="grid grid-cols-1 gap-4">
                                  <div className="rounded-xl border border-border bg-card/60 p-6">
                                     <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2 mb-4">
@@ -860,7 +721,7 @@ export default function PatientIntake() {
                               <div className="rounded-xl border border-dashed border-border bg-black/5 p-6 flex items-center justify-between">
                                  <div className="flex items-center gap-4">
                                     <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center"><Activity className="h-5 w-5 text-primary" /></div>
-                                    <div><h4 className="font-bold text-sm">Wearable Device</h4><p className="text-xs text-muted-foreground">Sync for live vitals.</p></div>
+                                    <div><h4 className="font-bold text-sm">Wearable Device</h4><p className="text-xs text-muted-foreground">{t('intake.sync_desc')}</p></div>
                                  </div>
                                  <Button size="sm" onClick={handleConnectWearable} disabled={connecting}>{connecting ? "Connecting..." : "Connect"}</Button>
                               </div>
@@ -880,8 +741,8 @@ export default function PatientIntake() {
                               </motion.div>
                            )}
 
-                        </div>
-                     </div>
+
+                  </div>
                   </motion.div>
                )}
 
@@ -1008,11 +869,13 @@ export default function PatientIntake() {
                            </Button>
                         </div>
                      </div>
-                  </motion.div>
-               )}
+                  
+
+               </motion.div>
+            )}
 
             </AnimatePresence>
          </main>
-      </div >
+      </div>
    );
 }
