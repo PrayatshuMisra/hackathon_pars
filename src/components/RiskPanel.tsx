@@ -30,11 +30,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+import { Skeleton } from "@/components/ui/skeleton";
+
 interface Props {
   result: TriageResult | null;
   patients: Patient[];
   apiError: string | null;
   selectedPatient?: Patient | null;
+  loading?: boolean;
 }
 
 // 🎨 DYNAMIC THEME CONFIGURATION
@@ -92,7 +95,7 @@ const PROTOCOLS = {
   ]
 };
 
-export default function RiskPanel({ result, patients, apiError, selectedPatient }: Props) {
+export default function RiskPanel({ result, patients, apiError, selectedPatient, loading }: Props) {
   const { t, i18n } = useTranslation();
   
   // Default to first patient if specific selection missing (e.g. live view)
@@ -271,6 +274,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient 
   const [randomProtocol, setRandomProtocol] = useState<any>(null);
   const [showFullList, setShowFullList] = useState(false);
   
+  // Define defaults safely for loading state
   const riskKey = result?.risk_label as keyof typeof THEME || "LOW";
   const currentTheme = THEME[riskKey];
   const scorePercent = result ? Math.round(result.risk_score * 100) : 0;
@@ -287,6 +291,44 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient 
       setRandomProtocol(random);
     }
   }, [result]);
+
+  if (loading) {
+     return (
+        <div className="flex h-full flex-col bg-zinc-950 border-l border-zinc-800 relative overflow-hidden">
+           {/* Skeleton Header */}
+           <div className="relative z-10 flex items-center justify-between border-b border-zinc-800 p-5 bg-zinc-950/80 backdrop-blur-sm">
+              <Skeleton className="h-10 w-10 rounded-md bg-zinc-800" />
+              <Skeleton className="h-8 w-24 rounded-full bg-zinc-800" />
+           </div>
+           
+           <ScrollArea className="relative z-10 flex-1 px-5 py-6">
+              <div className="space-y-8 flex flex-col items-center">
+                 {/* Skeleton Gauge */}
+                 <div className="relative flex flex-col items-center justify-center py-4">
+                    <Skeleton className="h-60 w-60 rounded-full bg-zinc-900" />
+                 </div>
+                 
+                 {/* Skeleton Reasoning */}
+                 <div className="w-full rounded border border-zinc-800 bg-zinc-900/50 p-5 space-y-2">
+                    <Skeleton className="h-4 w-1/3 bg-zinc-800" />
+                    <Skeleton className="h-3 w-full bg-zinc-800" />
+                    <Skeleton className="h-3 w-5/6 bg-zinc-800" />
+                    <Skeleton className="h-3 w-4/6 bg-zinc-800" />
+                 </div>
+
+                 {/* Skeleton Referral */}
+                 <div className="w-full space-y-4 pt-4 border-t border-zinc-800">
+                    <div className="flex justify-between">
+                       <Skeleton className="h-4 w-32 bg-zinc-800" />
+                       <Skeleton className="h-3 w-20 bg-zinc-800" />
+                    </div>
+                    <Skeleton className="h-40 w-full rounded-xl bg-zinc-900" />
+                 </div>
+              </div>
+           </ScrollArea>
+        </div>
+     );
+  }
 
   return (
     <div className="flex h-full flex-col bg-zinc-950 border-l border-zinc-800 relative overflow-hidden transition-colors duration-500">
@@ -399,8 +441,18 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient 
                 <Info className="h-4 w-4 text-zinc-500" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">{t('risk.ai_assessment')}</h3>
               </div>
-              <p className="text-sm leading-relaxed text-zinc-300 font-mono">
-                {">"} {result.details}
+              <p className="text-sm leading-relaxed text-zinc-300 font-mono min-h-[3rem]">
+                <span className="mr-2 text-zinc-500">{">"}</span>
+                {result.details.split("").map((char, index) => (
+                  <motion.span
+                    key={index}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.05, delay: index * 0.015 }}
+                  >
+                    {char}
+                  </motion.span>
+                ))}
               </p>
             </div>
           )}

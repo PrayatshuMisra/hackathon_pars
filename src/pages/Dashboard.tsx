@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePatients, Patient } from "@/hooks/usePatients";
 import { useTriage, PatientInput } from "@/hooks/useTriage";
 import { useTranslation } from "react-i18next";
+import { motion } from "framer-motion"; // <--- IMPORT ADDED
 import PatientQueue from "@/components/PatientQueue";
 import TriageForm from "@/components/TriageForm";
 import RiskPanel from "@/components/RiskPanel";
@@ -13,10 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import AdminStats from "@/components/AdminStats";
 import { 
   LogOut, 
-  Shield, 
   LayoutDashboard, 
   Stethoscope,
   Plus,
@@ -58,39 +59,27 @@ export default function Dashboard() {
   const [simActive, setSimActive] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [sortOrder, setSortOrder] = useState<"priority" | "recent" | "old">("priority"); // Sort by risk priority by default
+  const [sortOrder, setSortOrder] = useState<"priority" | "recent" | "old">("priority"); 
   
   // Refs for logic
   const simActiveRef = useRef(false);
   const simRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const prevActivePatients = useRef<Patient[]>([]); // Track queue state
+  const prevActivePatients = useRef<Patient[]>([]); 
 
-  // Sync sim state to ref
   useEffect(() => {
     simActiveRef.current = simActive;
   }, [simActive]);
 
-  // ------------------------------------------------------------------
-  // 1. QUEUE MONITORING EFFECT (Handles Exit Toasts)
-  // ------------------------------------------------------------------
+  // 1. QUEUE MONITORING
   useEffect(() => {
-    // Detect who left the queue since the last render
     const removedPatients = prevActivePatients.current.filter(
       (prev) => !activePatients.some((curr) => curr.id === prev.id)
     );
 
     removedPatients.forEach((patient) => {
-      // Safety Check: Sometimes an ID changes from 'temp' to 'real' during sync.
-      // We check if a patient with the same name exists to avoid a false "Exit" toast.
       const isJustIdSwap = activePatients.some((curr) => curr.name === patient.name);
 
       if (!isJustIdSwap) {
-        // ACTUAL DISCHARGE EVENT
-        const deptKey = patient.department || "General_Medicine";
-        const departmentName = t(`departments.${deptKey}`, deptKey.replace(/_/g, " "));
-        
-        console.log("[Queue] Patient Discharged:", patient.name);
-        
         toast.success(`${t('dashboard.processed_toast')}: ${patient.name}`, {
           description: t('dashboard.processed_desc'),
           duration: 4000,
@@ -99,17 +88,12 @@ export default function Dashboard() {
       }
     });
 
-    // Update ref for next comparison
     prevActivePatients.current = activePatients;
   }, [activePatients, t]);
 
 
-  // ------------------------------------------------------------------
   // 2. SUBMISSION LOGIC
-  // ------------------------------------------------------------------
   const handleSubmit = useCallback(async (data: PatientInput & { name: string }, isAuto: boolean = false) => {
-    
-    // Guard: Stop if sim was toggled off during an async cycle
     if (isAuto && !simActiveRef.current) return;
 
     const triageResult = await predict(data);
@@ -117,7 +101,6 @@ export default function Dashboard() {
     if (isAuto && !simActiveRef.current) return;
 
     if (triageResult) {
-      // Add to Queue (Hook handles logic)
       const newPatient = await addPatient({
         name: data.name,
         age: data.Age,
@@ -141,7 +124,6 @@ export default function Dashboard() {
         chief_complaint: data.Chief_Complaint,
       });
 
-      // Entry Toast
       toast.success(`${isAuto ? '🤖 [SIM]' : '✅'} ${t('dashboard.triaged_toast')}: ${data.name}`, {
         description: `${t('risk.risk_index')}: ${triageResult.risk_label} | ${t('dashboard.assigned_queue')}`,
         duration: 3000,
@@ -149,12 +131,10 @@ export default function Dashboard() {
 
       if (!isAuto) {
         setActiveTab("analysis");
-        // We'll set the selected patient after we get the newPatient object
       }
 
-      // Immediate Analytics Record (For Graph)
       if (newPatient) {
-        if (!isAuto) setSelectedPatient(newPatient); // Set selected patient for PDF export
+        if (!isAuto) setSelectedPatient(newPatient); 
         const rawDept = triageResult.referral?.department || "General Medicine";
         try {
            await supabase.from("patient_assignments").insert({
@@ -166,14 +146,11 @@ export default function Dashboard() {
         } catch (err) {
            console.error("Analytics Error:", err);
         }
-        // Removed the setTimeout here. The useEffect above handles the exit toast now.
       }
     }
   }, [predict, addPatient, t]);
 
-  // ------------------------------------------------------------------
   // 3. SIMULATION LOOP
-  // ------------------------------------------------------------------
   useEffect(() => {
     if (simActive) {
       handleSubmit(randomPatientInput(), true);
@@ -207,23 +184,19 @@ export default function Dashboard() {
     i18n.changeLanguage(lng);
   };
 
-  // Sort patients by risk priority or arrival time
   const sortedPatients = [...activePatients].sort((a, b) => {
     if (sortOrder === "priority") {
-      // Sort by risk level: HIGH > MEDIUM > LOW
       const riskOrder = { "HIGH": 0, "MEDIUM": 1, "LOW": 2 };
       const riskA = riskOrder[a.risk_label as keyof typeof riskOrder] ?? 3;
       const riskB = riskOrder[b.risk_label as keyof typeof riskOrder] ?? 3;
       return riskA - riskB;
     } else {
-      // Sort by arrival time
       const timeA = new Date(a.created_at || 0).getTime();
       const timeB = new Date(b.created_at || 0).getTime();
       return sortOrder === "recent" ? timeB - timeA : timeA - timeB;
     }
   });
 
-  // Toggle sort order: priority -> recent -> old -> priority
   const toggleSort = () => {
     if (sortOrder === "priority") setSortOrder("recent");
     else if (sortOrder === "recent") setSortOrder("old");
@@ -233,61 +206,120 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen flex-col text-foreground font-sans selection:bg-primary/20 p-4 gap-4 overflow-hidden">
       
-      {/* Header */}
-      <header className="flex h-16 shrink-0 items-center justify-between rounded-2xl border border-[#D4AF37]/50 bg-card/30 px-6 backdrop-blur-md shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 text-primary shadow-inner">
-            <Shield className="h-6 w-6" />
+      {/* --- HEADER --- */}
+      <motion.header 
+        initial={{ y: -50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="sticky top-0 z-50 mx-auto w-full shrink-0"
+      >
+        <div className="flex h-20 items-center justify-between rounded-3xl border border-border/40 bg-background/80 px-6 shadow-xl backdrop-blur-xl transition-all hover:border-border/60 hover:shadow-2xl">
+          
+          {/* --- Brand Section --- */}
+          <div className="flex items-center gap-4">
+            
+            {/* UPDATED LOGO SECTION */}
+            <motion.img
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              src="/logo.png"
+              alt="PARS Logo"
+              // Adjusted h-16 to h-12 md:h-14 to fit inside the h-20 header comfortably with padding
+              className="h-12 md:h-14 w-auto drop-shadow-[0_0_15px_rgba(255,0,0,0.4)]"
+            />
+            
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold tracking-tight text-foreground font-serif-display">
+                {t('app.title')}
+              </h1>
+              <div className="flex items-center gap-2">
+                <span className="h-0.5 w-4 bg-muted-foreground/30 rounded-full"></span>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  {t('app.subtitle')}
+                </p>
+              </div>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight font-serif-display">{t('app.title')}</h1>
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t('app.subtitle')}</p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                <Select onValueChange={changeLanguage} defaultValue={i18n.language}>
-                    <SelectTrigger className="w-[100px] h-8 bg-background/50 border-primary/20 text-xs text-foreground">
-                        <SelectValue placeholder="Language" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="en">English</SelectItem>
-                        <SelectItem value="hi">हिंदी</SelectItem>
-                        <SelectItem value="ta">தமிழ்</SelectItem>
-                        <SelectItem value="te">తెలుగు</SelectItem>
-                        <SelectItem value="bn">বাংলা</SelectItem>
-                        <SelectItem value="pa">ਪੰਜਾਬੀ</SelectItem>
-                        <SelectItem value="mr">मराठी</SelectItem>
-                    </SelectContent>
-                </Select>
+          {/* --- Right Actions Section --- */}
+          <div className="flex items-center gap-4">
+            
+            {/* Language Selector */}
+            <div className="hidden sm:flex items-center gap-2 rounded-full bg-secondary/50 px-3 py-1.5 border border-transparent hover:border-border transition-colors">
+              <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+              <Select onValueChange={changeLanguage} defaultValue={i18n.language}>
+                <SelectTrigger className="h-6 w-[90px] border-0 bg-transparent p-0 text-xs font-medium focus:ring-0 shadow-none text-muted-foreground hover:text-foreground">
+                  <SelectValue placeholder="Language" />
+                </SelectTrigger>
+                <SelectContent align="end" className="min-w-[8rem]">
+                  <SelectItem value="en">🇬🇧 English</SelectItem>
+                  <SelectItem value="hi">🇮🇳 हिंदी</SelectItem>
+                  <SelectItem value="ta">🇮🇳 தமிழ்</SelectItem>
+                  <SelectItem value="te">🇮🇳 తెలుగు</SelectItem>
+                  <SelectItem value="bn">🇮🇳 বাংলা</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-          <div className="hidden md:flex flex-col items-end border-r border-border pr-4">
-            <span className="text-sm font-semibold">{user?.email?.split('@')[0]}</span>
-            <span className="text-[10px] text-muted-foreground uppercase">{t('app.on_duty')}</span>
+            {/* Divider */}
+            <div className="h-8 w-px bg-border/60 hidden md:block" />
+
+            {/* User Profile Area */}
+            <div className="hidden md:flex items-center gap-3">
+              <div className="flex flex-col items-end">
+                <span className="text-sm font-semibold leading-none">
+                  {user?.email?.split('@')[0] || "Dr. Staff"}
+                </span>
+                <span className="mt-1 text-[10px] text-emerald-600 font-bold uppercase tracking-wider bg-emerald-500/10 px-1.5 py-0.5 rounded-sm">
+                  {t('app.on_duty')}
+                </span>
+              </div>
+              <Avatar className="h-10 w-10 border-2 border-background shadow-sm ring-2 ring-primary/10">
+                <AvatarImage src={user?.user_metadata?.avatar_url} alt="User" />
+                <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                  {user?.email?.[0].toUpperCase() || "D"}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+
+            {/* Action Buttons Group */}
+            <div className="flex items-center gap-2 pl-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowAdmin(true)}
+                className="hidden lg:flex gap-2 shadow-sm hover:bg-primary hover:text-primary-foreground transition-all"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                {t('app.admin')}
+              </Button>
+              
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={signOut} 
+                className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors"
+                title="Sign Out"
+              >
+                <LogOut className="h-5 w-5" />
+              </Button>
+            </div>
+
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowAdmin(true)}
-            className="hidden md:flex gap-2 border-primary/20 text-primary hover:bg-primary/10"
-          >
-            <LayoutDashboard className="h-4 w-4" />
-            {t('app.admin')}
-          </Button>
-          <Button variant="ghost" size="icon" onClick={signOut} className="text-muted-foreground hover:text-destructive transition-colors">
-            <LogOut className="h-5 w-5" />
-          </Button>
         </div>
-      </header>
+      </motion.header>
 
       {/* Main Workspace */}
       <div className="flex flex-1 flex-col md:flex-row gap-4 overflow-hidden">
         
         {/* LEFT COLUMN: Queue */}
-        <aside className="w-full md:w-[320px] lg:w-[380px] flex flex-col shrink-0 rounded-2xl border border-[#D4AF37]/50 bg-card/30 backdrop-blur-md shadow-lg overflow-hidden h-[300px] md:h-auto transition-all">
+        <motion.aside 
+          initial={{ x: -50, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
+          className="w-full md:w-[320px] lg:w-[380px] flex flex-col shrink-0 rounded-2xl glass-panel overflow-hidden h-[300px] md:h-auto transition-all"
+        >
           <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-card/40">
             <div className="flex items-center gap-2">
               <LayoutDashboard className="h-4 w-4 text-muted-foreground" />
@@ -339,15 +371,21 @@ export default function Dashboard() {
               patients={sortedPatients}
               selectedId={null}
               onSelect={handleSelectPatient}
+              loading={activePatients.length === 0 && loading} 
             />
           </div>
-        </aside>
+        </motion.aside>
 
         {/* RIGHT COLUMN: Workbench */}
-        <main className="flex-1 flex flex-col min-w-0 relative rounded-2xl overflow-hidden">
+        <motion.main 
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.4, ease: "easeOut" }}
+          className="flex-1 flex flex-col min-w-0 relative rounded-2xl overflow-hidden"
+        >
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col h-full">
             <div className="pb-4 shrink-0">
-              <TabsList className="grid w-full max-w-[400px] grid-cols-2 bg-card/30 border border-[#D4AF37]/50 backdrop-blur-md rounded-xl p-1">
+              <TabsList className="grid w-full max-w-[400px] grid-cols-2 glass-panel rounded-xl p-1">
                 <TabsTrigger value="intake" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">
                  {t('dashboard.triage_intake')}
                 </TabsTrigger>
@@ -360,7 +398,7 @@ export default function Dashboard() {
             <div className="flex-1 overflow-hidden">
               <div className="h-full">
                 <TabsContent value="intake" className="h-full mt-0 border-0 focus-visible:ring-0 data-[state=active]:flex flex-col">
-                  <div className="flex flex-col h-full rounded-2xl border border-[#D4AF37]/50 bg-card/30 shadow-xl backdrop-blur-md transition-all">
+                  <div className="flex flex-col h-full rounded-2xl glass-panel shadow-xl transition-all">
                       <div className="flex-1 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent rounded-2xl">
                         <TriageForm onSubmit={(data) => handleSubmit(data, false)} loading={loading} />
                       </div>
@@ -368,10 +406,10 @@ export default function Dashboard() {
                 </TabsContent>
 
                 <TabsContent value="analysis" className="h-full mt-0 border-0 focus-visible:ring-0 data-[state=active]:flex flex-col">
-                  <div className="flex flex-col h-full rounded-2xl border border-[#D4AF37]/50 bg-card/30 shadow-xl overflow-hidden backdrop-blur-md transition-all">
+                  <div className="flex flex-col h-full rounded-2xl glass-panel shadow-xl overflow-hidden transition-all">
                       <div className="flex-1 overflow-hidden relative rounded-2xl">
                         <div className="absolute inset-0">
-                           <RiskPanel result={result} patients={patients} apiError={error} selectedPatient={selectedPatient} />
+                           <RiskPanel result={result} patients={patients} apiError={error} selectedPatient={selectedPatient} loading={loading} />
                         </div>
                       </div>
                   </div>
@@ -379,7 +417,7 @@ export default function Dashboard() {
               </div>
             </div>
           </Tabs>
-        </main>
+        </motion.main>
       </div>
 
       <Footer />

@@ -2,11 +2,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Activity, Clock } from "lucide-react";
 import { Patient } from "@/hooks/usePatients";
 import { useTranslation } from "react-i18next";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Props {
   patients: Patient[];
   selectedId: string | null;
   onSelect: (p: Patient) => void;
+  loading?: boolean;
 }
 
 function riskColor(label: string | null) {
@@ -35,8 +37,33 @@ function getDisplayId(id: string) {
   return `sdv-id-${result}`;
 }
 
-export default function PatientQueue({ patients, selectedId, onSelect }: Props) {
+export default function PatientQueue({ patients, selectedId, onSelect, loading }: Props) {
   const { t } = useTranslation();
+
+  if (loading) {
+    return (
+      <div className="flex h-full flex-col p-2 space-y-2">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="flex flex-col gap-2 rounded-lg border border-border p-3 bg-card/50">
+             <div className="flex justify-between items-center">
+                <div className="flex gap-2">
+                   <Skeleton className="h-4 w-24" />
+                   <Skeleton className="h-4 w-12" />
+                </div>
+                <Skeleton className="h-5 w-16 rounded-full" />
+             </div>
+             <Skeleton className="h-3 w-32" />
+             <div className="flex gap-3 mt-1">
+                <Skeleton className="h-3 w-10" />
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-3 w-10" />
+             </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">

@@ -161,7 +161,7 @@ export const useSpeechToText = ({ onResult, onCommand, continuous = false }: Use
                     try {
                         const toastId = toast.loading("🎙️ Processing with Whisper...");
                         const API_URL = import.meta.env.VITE_FASTAPI_URL || "http://localhost:8000";
-                        const response = await fetch(`${API_URL}/transcribe`, {
+                        const response = await fetch(`${import.meta.env.VITE_FASTAPI_URL}/transcribe`, {
                             method: "POST",
                             body: formData,
                         });
