@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const API_BASE_URL = import.meta.env.VITE_FASTAPI_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_FASTAPI_URL || "http://localhost:8000";
 
 export interface PatientInput {
   Age: number;
@@ -49,13 +49,13 @@ export function useTriage() {
     setResult(null); // Clear previous result to avoid "flash" of old data
     setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/predict`, {
+      const response = await fetch(`${API_URL}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      const triageResult: TriageResult = await res.json();
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      const triageResult: TriageResult = await response.json();
       console.log("[useTriage] API Response:", triageResult);
       setResult(triageResult);
       return triageResult;

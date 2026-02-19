@@ -36,15 +36,12 @@ import { parseVoiceInput } from "@/utils/voiceParser";
 import VitalsMonitor from "@/components/VitalsMonitor";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { patientSchema, type PatientFormValues } from "@/schemas/patientSchema";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
-interface SimpleFormState {
-   name: string;
-   age: string;
-   gender: string;
-   symptoms: string;
-   emergencyName: string;
-   emergencyPhone: string;
-}
+
 
 // Interface for Real Hospital Data
 interface HospitalData {
@@ -60,14 +57,20 @@ export default function PatientIntake() {
   const { predict, loading, result, setResult } = useTriage();
   const [step, setStep] = useState<"form" | "result" | "self-check-in">("form");
   
-  const [form, setForm] = useState<SimpleFormState>({
-    name: "",
-    age: "",
-    gender: "",
-    symptoms: "",
-    emergencyName: "",
-    emergencyPhone: "",
+  const form = useForm<PatientFormValues>({
+    resolver: zodResolver(patientSchema),
+    defaultValues: {
+      name: "",
+      age: undefined,
+      gender: "Male",
+      symptoms: "",
+      emergencyName: "",
+      emergencyPhone: ""
+    }
   });
+
+  const { register, handleSubmit: handleHookFormSubmit, setValue, watch, formState: { errors } } = form;
+  const formValues = watch();
 
   // --- WEARABLE SIMULATION (Dummy) ---
   const [wearableConnected, setWearableConnected] = useState(false);
@@ -90,16 +93,14 @@ export default function PatientIntake() {
 
   // --- REAL VOICE LOGIC ---
   const handleVoiceResult = (text: string) => {
-    setForm(prev => ({ 
-      ...prev, 
-      symptoms: prev.symptoms ? `${prev.symptoms} ${text}` : text 
-    }));
+    const currentSymptoms = formValues.symptoms || "";
+    setValue("symptoms", currentSymptoms ? `${currentSymptoms} ${text}` : text);
 
     const { extracted } = parseVoiceInput(text);
     
-    if (extracted.name) setForm(prev => ({ ...prev, name: extracted.name! }));
-    if (extracted.Age) setForm(prev => ({ ...prev, age: extracted.Age!.toString() }));
-    if (extracted.Gender) setForm(prev => ({ ...prev, gender: extracted.Gender! }));
+    if (extracted.name) setValue("name", extracted.name);
+    if (extracted.Age) setValue("age", extracted.Age);
+    if (extracted.Gender) setValue("gender", extracted.Gender as "Male" | "Female" | "Other");
 
     const { name, Age, Gender, ...others } = extracted as any;
     setExtractedData(prev => ({ ...prev, ...others }));
@@ -123,7 +124,7 @@ export default function PatientIntake() {
   const [sendingSms, setSendingSms] = useState(false);
   
   const handleSendSMS = async () => {
-    if (!form.emergencyPhone) {
+    if (!formValues.emergencyPhone) {
       toast.error("Phone Number Required", { description: "Please enter a number to send alerts." });
       return;
     }
@@ -132,18 +133,18 @@ export default function PatientIntake() {
     try {
       const { error } = await supabase.functions.invoke('send-emergency-sms', {
         body: { 
-          to: form.emergencyPhone, 
-          patient: form.name || "A Patient",
+          to: formValues.emergencyPhone, 
+          patient: formValues.name || "A Patient",
           location: "PARS Kiosk #4" 
         }
       });
 
       if (error) throw error;
-      toast.success("SMS Alert Sent", { description: `Notification sent to ${form.emergencyPhone}` });
+      toast.success("SMS Alert Sent", { description: `Notification sent to ${formValues.emergencyPhone}` });
 
     } catch (err) {
-      const message = `EMERGENCY ALERT: ${form.name || "The patient"} is currently at the hospital kiosk requesting assistance.`;
-      window.open(`sms:${form.emergencyPhone}?body=${encodeURIComponent(message)}`, '_self');
+      const message = `EMERGENCY ALERT: ${formValues.name || "The patient"} is currently at the hospital kiosk requesting assistance.`;
+      window.open(`sms:${formValues.emergencyPhone}?body=${encodeURIComponent(message)}`, '_self');
       toast.info("Opening SMS App", { description: "Using device messenger as fallback." });
     } finally {
       setSendingSms(false);
@@ -234,14 +235,12 @@ export default function PatientIntake() {
   }, [step]); 
 
   // --- FORM SUBMISSION ---
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const onSubmit = async (data: PatientFormValues) => {
     const payload: PatientInput & { name: string } = {
-      name: form.name,
-      Age: parseInt(form.age) || 30,
-      Gender: form.gender || "Male",
-      Chief_Complaint: form.symptoms,
+      name: data.name,
+      Age: data.age || 30,
+      Gender: data.gender || "Male",
+      Chief_Complaint: data.symptoms,
       Heart_Rate: 75,
       Systolic_BP: 120,
       Diastolic_BP: 80,
@@ -257,8 +256,8 @@ export default function PatientIntake() {
       ...extractedData
     };
 
-    await predict(payload);
     setStep("result");
+    await predict(payload);
   };
 
   // Store submit function in ref for voice command access
@@ -286,7 +285,7 @@ export default function PatientIntake() {
 
 
       {/* Header */}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card/50 px-6 backdrop-blur-md z-10">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card/30 backdrop-blur-md px-6 z-10">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Shield className="h-6 w-6" />
@@ -318,7 +317,7 @@ export default function PatientIntake() {
               exit={{ opacity: 0, y: -10 }}
               className="w-full max-w-3xl flex flex-col h-full md:h-auto md:max-h-[85vh]"
             >
-              <div className="rounded-2xl border border-border bg-card/80 shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col h-full md:h-auto">
+              <div className="rounded-2xl glass-panel shadow-2xl overflow-hidden flex flex-col h-full md:h-auto">
                 
                 {/* 1. AUTO-FILL TOOLBAR */}
                 <div className="bg-muted/30 border-b border-border p-3 flex items-center justify-between gap-4">
@@ -341,17 +340,15 @@ export default function PatientIntake() {
                               formData.append("file", file);
                               const toastId = toast.loading("Uploading & Parsing Document...");
                               try {
-                                 const res = await fetch("http://localhost:8000/parse-document", { method: "POST", body: formData });
+                                 const res = await fetch(`${import.meta.env.VITE_FASTAPI_URL}/parse-document`, { method: "POST", body: formData });
                                  const data = await res.json();
                                  if (data.data) {
                                     const extracted = data.data;
-                                    setForm(prev => ({
-                                       ...prev,
-                                       name: extracted.name || prev.name,
-                                       age: extracted.Age ? extracted.Age.toString() : prev.age,
-                                       gender: extracted.Gender || prev.gender,
-                                       symptoms: extracted.Chief_Complaint || prev.symptoms
-                                    }));
+                                    if (extracted.name) setValue("name", extracted.name);
+                                    if (extracted.Age) setValue("age", extracted.Age);
+                                    if (extracted.Gender) setValue("gender", extracted.Gender as "Male" | "Female" | "Other");
+                                    if (extracted.Chief_Complaint) setValue("symptoms", extracted.Chief_Complaint);
+                                    
                                     setExtractedData(prev => ({ ...prev, ...extracted }));
                                     toast.success("EHR Data Extracted Successfully", { id: toastId });
                                  }
@@ -426,7 +423,7 @@ export default function PatientIntake() {
 
                 {/* 2. FORM BODY */}
                 <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-primary/10">
-                  <form onSubmit={handleSubmit} className="space-y-8">
+                  <form id="intake-form" onSubmit={handleHookFormSubmit(onSubmit)} className="space-y-8">
                     
                     {/* SECTION: PATIENT IDENTITY */}
                     <div className="space-y-4">
@@ -442,12 +439,11 @@ export default function PatientIntake() {
                                 <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                                 <Input 
                                    id="name"
-                                   required
                                    placeholder="e.g. Jane Doe"
-                                   value={form.name}
-                                   onChange={e => setForm({...form, name: e.target.value})}
-                                   className="pl-9 bg-background/50 h-10"
+                                   {...register("name")}
+                                   className={`pl-9 bg-background/50 h-10 ${errors.name ? "border-red-500" : ""}`}
                                 />
+                                {errors.name && <span className="text-xs text-red-500">{errors.name.message}</span>}
                              </div>
                           </div>
 
@@ -459,19 +455,18 @@ export default function PatientIntake() {
                                 <Input 
                                    id="age"
                                    type="number"
-                                   required
                                    placeholder={t('intake.age_placeholder')}
-                                   value={form.age}
-                                   onChange={e => setForm({...form, age: e.target.value})}
-                                   className="pl-9 bg-background/50 h-10"
+                                   {...register("age")}
+                                   className={`pl-9 bg-background/50 h-10 ${errors.age ? "border-red-500" : ""}`}
                                 />
+                                {errors.age && <span className="text-xs text-red-500">{errors.age.message}</span>}
                              </div>
                           </div>
 
                           {/* Gender */}
                           <div className="md:col-span-3 space-y-2">
                              <Label htmlFor="gender" className="text-xs text-muted-foreground font-medium">{t('intake.gender')}</Label>
-                             <Select required value={form.gender} onValueChange={v => setForm({...form, gender: v})}>
+                             <Select value={formValues.gender} onValueChange={v => setValue("gender", v as any)}>
                                 <SelectTrigger className="bg-background/50 h-10">
                                    <SelectValue placeholder={t('intake.select')} />
                                 </SelectTrigger>
@@ -511,13 +506,12 @@ export default function PatientIntake() {
                        <div className="relative">
                           <Textarea 
                              id="symptoms"
-                             required
                              rows={6}
                              placeholder={t('intake.symptoms_placeholder')}
-                             value={form.symptoms}
-                             onChange={e => setForm({...form, symptoms: e.target.value})}
-                             className={`bg-background/50 min-h-[140px] text-base resize-none focus:ring-primary/20 transition-all ${isListening ? "ring-2 ring-red-500/50 border-red-500/50" : ""}`}
+                             {...register("symptoms")}
+                             className={`bg-background/50 min-h-[140px] text-base resize-none focus:ring-primary/20 transition-all ${isListening ? "ring-2 ring-red-500/50 border-red-500/50" : ""} ${errors.symptoms ? "border-red-500" : ""}`}
                           />
+                          {errors.symptoms && <span className="text-xs text-red-500">{errors.symptoms.message}</span>}
                           
                           {/* FLOATING VOICE BUTTON */}
                           {hasSupport && (
@@ -562,10 +556,10 @@ export default function PatientIntake() {
                                 <Input 
                                    id="ename"
                                    placeholder={t('intake.contact_placeholder')}
-                                   value={form.emergencyName}
-                                   onChange={e => setForm({...form, emergencyName: e.target.value})}
-                                   className="pl-9 bg-white/40 border-primary/10 h-10"
+                                   {...register("emergencyName")}
+                                   className={`pl-9 bg-white/40 border-primary/10 h-10 ${errors.emergencyName ? "border-red-500" : ""}`}
                                 />
+                                {errors.emergencyName && <span className="text-xs text-red-500">{errors.emergencyName.message}</span>}
                              </div>
                           </div>
                           <div className="space-y-2">
@@ -576,10 +570,10 @@ export default function PatientIntake() {
                                    id="ephone"
                                    type="tel"
                                    placeholder="(555) 000-0000"
-                                   value={form.emergencyPhone}
-                                   onChange={e => setForm({...form, emergencyPhone: e.target.value})}
-                                   className="pl-9 bg-white/40 border-primary/10 h-10"
+                                   {...register("emergencyPhone")}
+                                   className={`pl-9 bg-white/40 border-primary/10 h-10 ${errors.emergencyPhone ? "border-red-500" : ""}`}
                                 />
+                                {errors.emergencyPhone && <span className="text-xs text-red-500">{errors.emergencyPhone.message}</span>}
                              </div>
                           </div>
                        </div>
@@ -591,7 +585,8 @@ export default function PatientIntake() {
                 {/* 3. FOOTER */}
                 <div className="p-4 border-t border-border bg-muted/20">
                    <Button 
-                      onClick={handleSubmit}
+                      type="submit"
+                      form="intake-form"
                       disabled={loading}
                       className="w-full h-12 text-base font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all rounded-xl"
                    >
@@ -627,7 +622,7 @@ export default function PatientIntake() {
                  </div>
                  <Button 
                    variant="outline" 
-                   onClick={() => { setStep("form"); setResult(null); setForm({name:"", age:"", gender:"", symptoms:"", emergencyName: "", emergencyPhone: ""}); setExtractedData({}); setNearestHospital(null); }}
+                   onClick={() => { setStep("form"); setResult(null); form.reset(); setExtractedData({}); setNearestHospital(null); }}
                    className="gap-2"
                  >
                    <ChevronLeft className="h-4 w-4" /> {t('intake.new_checkin')}
@@ -777,7 +772,7 @@ export default function PatientIntake() {
                                  </div>
                                  <div className="flex-1">
                                     <h4 className="font-bold text-blue-500">Notify Emergency Contact</h4>
-                                    <p className="text-xs text-blue-400/80 mb-2">{form.emergencyName || "Family/Friend"}</p>
+                                    <p className="text-xs text-blue-400/80 mb-2">{formValues.emergencyName || "Family/Friend"}</p>
                                     <Button size="sm" variant="default" className="w-full bg-blue-500 hover:bg-blue-600" onClick={handleSendSMS} disabled={sendingSms}>
                                        {sendingSms ? <Loader2 className="h-3 w-3 animate-spin" /> : "Send SMS Alert"}
                                     </Button>
@@ -838,9 +833,8 @@ export default function PatientIntake() {
                            <div className="space-y-2">
                               <Label>Full Name</Label>
                               <Input
-                                 value={form.name}
-                                 onChange={e => setForm({ ...form, name: e.target.value })}
                                  placeholder="e.g. John Doe"
+                                 {...register("name")}
                               />
                            </div>
                            <div className="grid grid-cols-2 gap-4">
@@ -848,14 +842,13 @@ export default function PatientIntake() {
                                  <Label>Age</Label>
                                  <Input
                                     type="number"
-                                    value={form.age}
-                                    onChange={e => setForm({ ...form, age: e.target.value })}
                                     placeholder="30"
+                                    {...register("age")}
                                  />
                               </div>
                               <div className="space-y-2">
                                  <Label>Gender</Label>
-                                 <Select value={form.gender} onValueChange={v => setForm({ ...form, gender: v })}>
+                                 <Select value={watch("gender")} onValueChange={v => setValue("gender", v as any)}>
                                     <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                     <SelectContent>
                                        <SelectItem value="Male">Male</SelectItem>
@@ -868,10 +861,9 @@ export default function PatientIntake() {
                            <div className="space-y-2">
                               <Label>Symptoms</Label>
                               <Textarea
-                                 value={form.symptoms}
-                                 onChange={e => setForm({ ...form, symptoms: e.target.value })}
                                  placeholder="Briefly describe your symptoms..."
                                  rows={3}
+                                 {...register("symptoms")}
                               />
                            </div>
                         </div>
@@ -880,16 +872,17 @@ export default function PatientIntake() {
                            <Button
                               className="w-full"
                               onClick={async () => {
+                                 const values = form.getValues();
                                  const payload = {
-                                    name: form.name,
-                                    age: parseInt(form.age) || 30,
-                                    gender: form.gender || "Male",
-                                    symptoms: form.symptoms || "General checkup"
+                                    name: values.name,
+                                    age: values.age ? Number(values.age) : 30,
+                                    gender: values.gender || "Male",
+                                    symptoms: values.symptoms || "General checkup"
                                  };
 
                                  try {
                                     // 1. Call simplified endpoint
-                                    const res = await fetch("http://localhost:8000/self-check-in", {
+                                    const res = await fetch(`${import.meta.env.VITE_FASTAPI_URL}/self-check-in`, {
                                        method: "POST",
                                        headers: { "Content-Type": "application/json" },
                                        body: JSON.stringify(payload)
@@ -897,8 +890,6 @@ export default function PatientIntake() {
                                     const data = await res.json();
 
                                     // 2. Add to Supabase Queue (Real Queue Integration)
-                                    // We use a fallback user_id if valid auth isn't present (for demo/kiosk mode)
-                                    // In a real app, the Kiosk would be authenticated as a "Station".
                                     const { error: dbError } = await supabase.from("patients").insert({
                                        name: payload.name,
                                        age: payload.age,
@@ -924,7 +915,6 @@ export default function PatientIntake() {
                                     if (dbError) console.error("Queue Error:", dbError);
 
                                     // 3. Mark as Self Check-In for View Logic
-                                    // We add a flag to the result object or handle it via a new step
                                     setResult({ ...data, isSelfCheckIn: true });
                                     setStep("result");
                                     toast.success("Check-In Successful", { description: "You have been added to the queue." });

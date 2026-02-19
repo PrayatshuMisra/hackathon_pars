@@ -109,3 +109,15 @@
 }
 
 /* CTF Page Animations */
+
+@layer utilities {
+.glass-panel {
+  @apply bg-card/30 backdrop-blur-md border-2 border-black shadow-xl;
+}
+
+  
+  .glass-card {
+    @apply bg-card/60 backdrop-blur-sm border border-border/50 shadow-sm hover:bg-card/70 transition-colors;
+  }
+}
+

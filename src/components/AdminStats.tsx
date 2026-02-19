@@ -40,6 +40,7 @@ interface Assignment {
 export default function AdminStats({ patients, onClose }: AdminStatsProps) {
     const { t } = useTranslation();
     const [assignments, setAssignments] = useState<Assignment[]>([]);
+    const [totalPatientCount, setTotalPatientCount] = useState(0);
 
     useEffect(() => {
         const fetchAssignments = async () => {
@@ -53,7 +54,18 @@ export default function AdminStats({ patients, onClose }: AdminStatsProps) {
             }
         };
 
+        const fetchTotalCount = async () => {
+            const { count, error } = await supabase
+                .from('patients')
+                .select('*', { count: 'exact', head: true });
+            
+            if (!error && count !== null) {
+                setTotalPatientCount(count);
+            }
+        };
+
         fetchAssignments();
+        fetchTotalCount();
 
         // Optional: Subscribe to realtime, but simple fetch is fine for now
         const channel = supabase
@@ -226,13 +238,13 @@ export default function AdminStats({ patients, onClose }: AdminStatsProps) {
             ageStats: ageData,
             clinicalStats: clinicalData,
             kpi: {
-                total: patients.length,
+                total: totalPatientCount || patients.length,
                 high: riskCounts.HIGH,
                 avgWait: "12m", // Mock
                 departments: Object.keys(deptMap).filter(k => deptMap[k].total > 0).length // Active departments
             }
         };
-    }, [patients, assignments]);
+    }, [patients, assignments, totalPatientCount]);
 
     // Custom Tooltip
     const CustomTooltip = ({ active, payload, label }: any) => {
