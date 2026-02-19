@@ -1,8 +1,6 @@
-# PARS - Patient Assessment & Risk Stratification System
+# PARS - Patient Assessment & Risk Stratification System - BY TEAM ERRORISTS
 
 ![PARS Logo](public/logo.png)
-
-> **Hackathon Winning Project** | **Medical-Grade AI Triage System**
 
 PARS is a state-of-the-art **AI-Powered Triage System** designed to revolutionize emergency room efficiency. By leveraging machine learning and real-time data processing, PARS automatically prioritizes patients based on vital signs and chief complaints, ensuring that critical cases receive immediate attention.
 
