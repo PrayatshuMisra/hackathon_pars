@@ -22,8 +22,11 @@ import {
    Heart,
    Thermometer,
    Zap,
-   Navigation
+   Navigation,
+   Download
 } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +43,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { patientSchema, type PatientFormValues } from "@/schemas/patientSchema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import i18n from "@/i18n";
 
 
 
@@ -104,6 +108,221 @@ export default function PatientIntake() {
 
     const { name, Age, Gender, ...others } = extracted as any;
     setExtractedData(prev => ({ ...prev, ...others }));
+  };
+
+  // --- PDF EXPORT LOGIC FOR SELF CHECK-IN ---
+  const handleExportPDF = () => {
+    if (!result) return;
+    
+    // Construct a temporary patient object from form data
+    const values = form.getValues();
+    const activePatient = {
+       id: "SELF-CHECK-IN-" + Math.floor(Math.random() * 10000),
+       name: values.name,
+       age: values.age || 0,
+       gender: values.gender,
+       arrival_mode: "Walk-in",
+       diabetes: null,
+       hypertension: null,
+       heart_disease: null,
+       chief_complaint: values.symptoms,
+       explanation: result.details,
+       risk_label: "LOW",
+       department: result.referral?.department,
+       heart_rate: null,
+       systolic_bp: null,
+       diastolic_bp: null,
+       o2_saturation: null,
+       temperature: null,
+       respiratory_rate: null,
+       pain_score: null,
+       gcs_score: 15
+    };
+
+    // Force English for PDF
+    const tEn = i18n.getFixedT('en');
+
+    const doc = new jsPDF();
+    
+    // --- 1. PROFESSIONAL HEADER ---
+    doc.setFillColor(30, 41, 59); // Dark slate
+    doc.rect(0, 0, 210, 30, 'F');
+
+    // Logo / Title area
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.text(tEn('app.title'), 14, 18);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(200, 200, 200);
+    doc.text(tEn('risk.subtitle'), 14, 24);
+
+    // Meta Data (Top Right)
+    doc.setFontSize(9);
+    doc.text(`${tEn('pdf.date')}:`, 150, 12);
+    doc.text(new Date().toLocaleDateString('en-US').toUpperCase(), 175, 12);
+    
+    doc.text(`${tEn('pdf.time')}:`, 150, 17);
+    doc.text(new Date().toLocaleTimeString('en-US').toUpperCase(), 175, 17);
+
+    doc.text(`${tEn('pdf.case_id')}:`, 150, 22);
+    doc.text(`#${activePatient.id.slice(0, 15).toUpperCase()}`, 175, 22);
+
+    // --- 2. PATIENT IDENTITY ---
+    let currentY = 45;
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(tEn('risk.patient_identity'), 14, currentY);
+    
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, currentY + 2, 196, currentY + 2); // Underline
+
+    const patientData = [
+      [`${tEn('pdf.name')}:  ${activePatient.name}`, `${tEn('pdf.age_sex')}:  ${activePatient.age} / ${activePatient.gender}`],
+      [`${tEn('pdf.arrival')}:  ${activePatient.arrival_mode.toUpperCase()}`, `${tEn('pdf.history')}:  ${tEn('pdf.none_reported')}`]
+    ];
+
+    autoTable(doc, {
+      startY: currentY + 5,
+      body: patientData,
+      theme: 'plain',
+      styles: { fontSize: 10, cellPadding: 3, textColor: 50 },
+      columnStyles: { 0: { cellWidth: 100, fontStyle: 'bold' }, 1: { fontStyle: 'bold' } },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 10;
+
+    // --- 3. SUBJECTIVE: CHIEF COMPLAINT ---
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(tEn('risk.chief_complaint'), 14, currentY);
+    doc.line(14, currentY + 2, 196, currentY + 2);
+
+    // Background box for complaint
+    const complaintText = activePatient.chief_complaint || activePatient.explanation || tEn('risk.no_symptoms');
+    const splitComplaint = doc.splitTextToSize(complaintText, 180);
+    const boxHeight = (splitComplaint.length * 6) + 10;
+
+    doc.setFillColor(248, 250, 252); // Very light slate
+    doc.setDrawColor(226, 232, 240); // Border
+    doc.roundedRect(14, currentY + 5, 182, boxHeight, 2, 2, 'FD');
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(60, 60, 60);
+    doc.text(splitComplaint, 18, currentY + 12);
+
+    currentY += boxHeight + 15;
+
+    // --- 4. OBJECTIVE: VITALS GRID ---
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text(tEn('risk.objective_vitals'), 14, currentY);
+    doc.line(14, currentY + 2, 196, currentY + 2);
+
+    const vitals = [
+      [tEn('triage.hr'), `${activePatient.heart_rate ?? '--'} bpm`, tEn('triage.bp_sys'), `${activePatient.systolic_bp ?? '--'}/${activePatient.diastolic_bp ?? '--'} mmHg`, tEn('triage.spo2'), `${activePatient.o2_saturation ?? '--'}%`],
+      [tEn('triage.temp'), `${activePatient.temperature ?? '--'}°C`, tEn('triage.rr'), `${activePatient.respiratory_rate ?? '--'}/min`, tEn('triage.pain_score'), `${activePatient.pain_score ?? '--'}/10`],
+      [tEn('triage.gcs_score'), `${activePatient.gcs_score ?? '--'}/15`, "", "", "", ""]
+    ];
+
+    autoTable(doc, {
+      startY: currentY + 5,
+      head: [[tEn('pdf.metric'), tEn('pdf.value'), tEn('pdf.metric'), tEn('pdf.value'), tEn('pdf.metric'), tEn('pdf.value')]],
+      body: vitals,
+      theme: 'grid',
+      headStyles: { fillColor: [51, 65, 85], textColor: 255, fontSize: 9, halign: 'center' },
+      bodyStyles: { fontSize: 10, cellPadding: 4, halign: 'center' },
+      columnStyles: { 
+        0: { fontStyle: 'bold', fillColor: 245 }, 
+        2: { fontStyle: 'bold', fillColor: 245 },
+        4: { fontStyle: 'bold', fillColor: 245 }
+      }
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 15;
+
+    // --- 5. PARS ASSESSMENT (The "Conclusion") ---
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(tEn('risk.assessment'), 14, currentY);
+    doc.line(14, currentY + 2, 196, currentY + 2);
+
+    // Dynamic Color for Risk
+    let rColor = [46, 204, 113]; // Green
+    if (activePatient.risk_label === "MEDIUM") rColor = [243, 156, 18]; // Orange
+    if (activePatient.risk_label === "HIGH") rColor = [231, 76, 60]; // Red
+
+    // Risk Badge Box
+    doc.setFillColor(rColor[0], rColor[1], rColor[2]);
+    doc.rect(14, currentY + 8, 40, 20, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text(tEn('risk.triage_level'), 34, currentY + 14, { align: "center" });
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(activePatient.risk_label || "N/A", 34, currentY + 23, { align: "center" });
+
+
+    // Routing Box
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(255, 255, 255);
+    
+    // Calculate best doctor
+    const doctors = result.referral?.doctors || [];
+    const bestDoc = doctors.length > 0 ? doctors.reduce((prev: any, current: any) => (prev.experience > current.experience) ? prev : current, doctors[0]) : null;
+
+    const referralBoxHeight = bestDoc ? 40 : 25;
+    doc.roundedRect(64, currentY + 8, 132, referralBoxHeight, 3, 3); // Border only
+
+    doc.setTextColor(100, 100, 100);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.text(tEn('risk.recommended_dept').toUpperCase(), 70, currentY + 16);
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    const deptKey = activePatient.department || "General_Medicine";
+    // Force English department name
+    const dept = tEn(`departments.${deptKey}`, deptKey.replace(/_/g, " ")).toUpperCase();
+    doc.text(dept, 70, currentY + 24);
+
+    if (bestDoc) {
+       // Separator line
+       doc.setDrawColor(230, 230, 230);
+       doc.line(70, currentY + 28, 186, currentY + 28);
+
+       doc.setTextColor(100, 100, 100);
+       doc.setFontSize(8);
+       doc.setFont("helvetica", "bold");
+       doc.text("RECOMMENDED SPECIALIST", 70, currentY + 35);
+
+       doc.setTextColor(33, 150, 243); // Blue for doctor name
+       doc.setFontSize(12);
+       doc.setFont("helvetica", "bold");
+       doc.text(`${bestDoc.name}`, 70, currentY + 42);
+
+       doc.setTextColor(150, 150, 150);
+       doc.setFontSize(9);
+       doc.setFont("helvetica", "normal");
+       doc.text(`(${bestDoc.experience} Years Exp)`, 130, currentY + 42);
+    }
+    
+    // --- FOOTER ---
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.setFont("helvetica", "normal");
+    doc.text(tEn('risk.footer_note'), 105, pageHeight - 10, { align: "center" });
+
+    doc.save(`PARS_Report_${activePatient.name?.replace(/\s+/g, '_') || "SelfCheckIn"}.pdf`);
   };
 
   const handleVoiceCommand = (command: "stop" | "submit") => {
@@ -735,14 +954,22 @@ export default function PatientIntake() {
                    <h2 className="text-2xl font-bold font-serif-display text-foreground">{t('intake.assessment_complete')}</h2>
                    <p className="text-sm text-muted-foreground">{t('intake.assessment_desc')}</p>
                  </div>
-                 <Button 
-                   variant="outline" 
-                   onClick={() => { setStep("form"); setResult(null); form.reset(); setExtractedData({}); setNearestHospital(null); }}
-                   className="gap-2"
-                 >
-                   <ChevronLeft className="h-4 w-4" /> {t('intake.new_checkin')}
-                 </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleExportPDF}
+                    className="gap-2 mr-2"
+                  >
+                    <Download className="h-4 w-4" /> {t('risk.export_pdf')}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => { setStep("form"); setResult(null); form.reset(); setExtractedData({}); setNearestHospital(null); }}
+                    className="gap-2"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> {t('intake.new_checkin')}
+                  </Button>
       </div>
+
 
 
 

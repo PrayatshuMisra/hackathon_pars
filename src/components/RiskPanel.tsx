@@ -243,23 +243,51 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
     doc.setFont("helvetica", "bold");
     doc.text(activePatient.risk_label || "N/A", 34, currentY + 23, { align: "center" });
 
-    // Routing Box
-    doc.setDrawColor(0);
-    doc.setFillColor(255, 255, 255);
-    doc.rect(54, currentY + 8, 142, 20); // Border only
 
-    doc.setTextColor(80, 80, 80);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text(tEn('risk.recommended_dept'), 60, currentY + 14);
+    // Routing Box
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(255, 255, 255);
+
+    // Calculate best doctor
+    const doctors = result?.referral?.doctors || [];
+    const bestDoc = doctors.length > 0 ? doctors.reduce((prev: any, current: any) => (prev.experience > current.experience) ? prev : current, doctors[0]) : null;
+
+    const docBoxHeight = bestDoc ? 40 : 25;
+    doc.roundedRect(64, currentY + 8, 132, docBoxHeight, 3, 3); // Border only
+
+    doc.setTextColor(100, 100, 100);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.text(tEn('risk.recommended_dept').toUpperCase(), 70, currentY + 16);
 
     doc.setTextColor(0, 0, 0);
-    doc.setFontSize(16);
+    doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     const deptKey = activePatient.department || "General_Medicine";
     // Force English department name
     const dept = tEn(`departments.${deptKey}`, deptKey.replace(/_/g, " ")).toUpperCase();
-    doc.text(dept, 60, currentY + 23);
+    doc.text(dept, 70, currentY + 24);
+
+    if (bestDoc) {
+       // Separator line
+       doc.setDrawColor(230, 230, 230);
+       doc.line(70, currentY + 28, 186, currentY + 28);
+
+       doc.setTextColor(100, 100, 100);
+       doc.setFontSize(8);
+       doc.setFont("helvetica", "bold");
+       doc.text("RECOMMENDED SPECIALIST", 70, currentY + 35);
+
+       doc.setTextColor(33, 150, 243); // Blue for doctor name
+       doc.setFontSize(12);
+       doc.setFont("helvetica", "bold");
+       doc.text(`${bestDoc.name}`, 70, currentY + 42);
+
+       doc.setTextColor(150, 150, 150);
+       doc.setFontSize(9);
+       doc.setFont("helvetica", "normal");
+       doc.text(`(${bestDoc.experience} Years Exp)`, 130, currentY + 42);
+    }
 
     // --- FOOTER ---
     const pageHeight = doc.internal.pageSize.height;

@@ -55,7 +55,7 @@
         "hr": "Heart Rate",
         "bp_sys": "Systolic BP",
         "bp_dia": "Diastolic BP",
-        "spo2": "O₂ Saturation",
+        "spo2": "SpO2",
         "temp": "Temperature",
         "rr": "Resp Rate",
         "clinical": "Clinical",
