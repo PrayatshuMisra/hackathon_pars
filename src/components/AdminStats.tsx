@@ -94,7 +94,7 @@ export default function AdminStats({ patients, onClose }: AdminStatsProps) {
         const ALL_DEPARTMENTS = [
             "Cardiology", "Neurology", "Gastroenterology", "Pulmonology",
             "Orthopedics", "Emergency_Trauma", "General_Medicine", "Dermatology",
-            "ENT", "Urology_Nephrology", "Psychiatry", "Toxicology"
+            "ENT", "Urology_Nephrology", "Psychiatry", "Toxicology", "Gynaecology"
         ];
 
         // Initialize map with 0s for all departments

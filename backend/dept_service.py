@@ -61,7 +61,8 @@ DEPARTMENTS = [
     "ENT (Ear, Nose, Throat, Sinus, Tonsillitis, Earache, Sore Throat, Nasal Congestion)",
     "Urology_Nephrology (Kidney, Bladder, Urine, UTI, Renal, Urinary Tract, Kidney Stone, Nephritis)",
     "Psychiatry (Mental Health, Depression, Anxiety, Panic Attack, Suicidal Thoughts, Psychosis, Bipolar, PTSD)",
-    "Toxicology (Poisoning, Overdose, Chemicals, Alcohol, Snake Bite, Venom, Venomous, Toxic, Antidote, Drug Abuse, Intoxication, Scorpion Sting, Spider Bite, Insect Venom)"
+    "Toxicology (Poisoning, Overdose, Chemicals, Alcohol, Snake Bite, Venom, Venomous, Toxic, Antidote, Drug Abuse, Intoxication, Scorpion Sting, Spider Bite, Insect Venom)",
+    "Gynaecology (Irregular periods, Missed periods, Heavy bleeding, Spotting, Pelvic pain, Pregnancy, Infertility, Menopause, PCOS)"
 ]
 
 # ============================================================
@@ -132,6 +133,24 @@ MEDICAL_KEYWORDS = {
     "Urology_Nephrology": {
         "kidney": 0.8, "bladder": 0.8, "urinary": 0.75, "uti": 0.85,
         "kidney stone": 0.9, "renal": 0.8, "urine": 0.7
+    },
+    "Gynaecology": {
+    "irregular periods": 0.85,
+    "missed periods": 0.8,
+    "heavy bleeding": 0.85,
+    "spotting": 0.7,
+    "pelvic pain": 0.8,
+    "lower abdominal pain": 0.75,
+    "vaginal discharge": 0.8,
+    "foul smelling discharge": 0.85,
+    "itching": 0.7,
+    "burning sensation": 0.65,
+    "pain during intercourse": 0.8,
+    "menstrual cramps": 0.75,
+    "pcos": 0.9,
+    "pregnancy symptoms": 0.85,
+    "infertility": 0.85,
+    "menopause symptoms": 0.8
     },
     "General_Medicine": {
         "fever": 0.7, "flu": 0.75, "cold": 0.7, "fatigue": 0.6,
@@ -361,6 +380,10 @@ def get_department_legacy(complaint: str) -> str:
         ],
         "Urology_Nephrology": [
             "kidney", "urine", "bladder", "uti", "renal"
+        ],
+        "Gynaecology": [
+            "period", "menstrual", "bleeding", "spotting", "pain", "discharge",
+            "infertility", "pregnancy", "menopause"
         ],
         "General_Medicine": [
             "fever", "flu", "fatigue", "cold", "weakness"

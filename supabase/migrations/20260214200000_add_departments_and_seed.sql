@@ -94,6 +94,13 @@ CREATE TABLE Toxicology (
     experience_years INT NOT NULL,
     is_available BOOLEAN DEFAULT TRUE
 );
+-- 13. Gynaecology Table
+CREATE TABLE Gynaecology (
+    doc_id SERIAL PRIMARY KEY,
+    doc_name VARCHAR(100) NOT NULL,
+    experience_years INT NOT NULL,
+    is_available BOOLEAN DEFAULT TRUE
+);
 
 -- SEED DATA
 
@@ -192,3 +199,11 @@ INSERT INTO Toxicology (doc_name, experience_years, is_available) VALUES
 ('Dr. Leonard Hofstadter', 11, FALSE),
 ('Dr. Amy Fowler', 9, TRUE),
 ('Dr. Bernadette Rostenkowski', 8, TRUE);
+
+--13. Gynaecology
+INSERT INTO gynaecology (doc_name, experience_years, is_available) VALUES
+('Dr. Margot Robbie', 15, TRUE),
+('Dr. Emma Watson', 8, TRUE),
+('Dr. Ryan Gosling', 22, TRUE),
+('Dr. Anne Hathaway', 12, TRUE),
+('Dr. Salma Hayek', 5, FALSE);
