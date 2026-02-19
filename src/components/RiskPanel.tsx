@@ -200,9 +200,9 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
     doc.line(14, currentY + 2, 196, currentY + 2);
 
     const vitals = [
-      [tEn('triage.hr'), `${activePatient.heart_rate} bpm`, tEn('triage.bp_sys'), `${activePatient.systolic_bp}/${activePatient.diastolic_bp} mmHg`, tEn('triage.spo2'), `${activePatient.o2_saturation}%`],
-      [tEn('triage.temp'), `${activePatient.temperature}°C`, tEn('triage.rr'), `${activePatient.respiratory_rate}/min`, tEn('triage.pain_score'), `${activePatient.pain_score}/10`],
-      [tEn('triage.gcs_score'), `${activePatient.gcs_score}/15`, "", "", "", ""]
+      [tEn('triage.hr'), `${activePatient.heart_rate ?? '--'} bpm`, tEn('triage.bp_sys'), `${activePatient.systolic_bp ?? '--'}/${activePatient.diastolic_bp ?? '--'} mmHg`, tEn('triage.spo2'), `${activePatient.o2_saturation ?? '--'}%`],
+      [tEn('triage.temp'), `${activePatient.temperature ?? '--'}°C`, tEn('triage.rr'), `${activePatient.respiratory_rate ?? '--'}/min`, tEn('triage.pain_score'), `${activePatient.pain_score ?? '--'}/10`],
+      [tEn('triage.gcs_score'), `${activePatient.gcs_score ?? '--'}/15`, "", "", "", ""]
     ];
 
     autoTable(doc, {
@@ -439,7 +439,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
               />
               <div className="mb-3 flex items-center gap-2">
                 <Info className="h-4 w-4 text-zinc-500" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">{t('risk.ai_assessment')}</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">{t('risk.pars_assessment')}</h3>
               </div>
               <p className="text-sm leading-relaxed text-zinc-300 font-mono min-h-[3rem]">
                 <span className="mr-2 text-zinc-500">{">"}</span>
