@@ -81,18 +81,24 @@ export function usePatients() {
     const interval = setInterval(() => {
       const now = new Date();
 
-      // 
-      // CHANGE: Set to exactly 30 seconds as requested
-      const cutoffTime = new Date(now.getTime() - 30 * 1000);
-
       const active = patients.filter(p => {
         const createdAt = new Date(p.created_at);
-        return createdAt > cutoffTime;
+        const timeDiff = now.getTime() - createdAt.getTime();
+
+        let retentionTime = 45 * 1000; // Default for LOW and unknown (45s)
+
+        if (p.risk_label === "HIGH") {
+          retentionTime = 30 * 1000; // 30 minutes
+        } else if (p.risk_label === "MEDIUM") {
+          retentionTime = 40 * 1000; // 40 seconds
+        }
+
+        return timeDiff < retentionTime;
       });
 
       // Only update state if count changes to prevent re-render flickers
       setActivePatients(prev => {
-        if (prev.length === active.length && prev[0]?.id === active[0]?.id) return prev;
+        if (prev.length === active.length && prev.every((p, i) => p.id === active[i].id)) return prev;
         return active;
       });
 
