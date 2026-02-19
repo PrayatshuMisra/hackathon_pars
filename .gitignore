@@ -24,3 +24,9 @@ dist-ssr
 *.sw?
 
 .env
+
+# OCR Debug Artifacts
+ocr_debug.log
+backend/ocr_debug.log
+backend/models.txt
+backend/list_models.py
