@@ -275,12 +275,6 @@ export default function Dashboard() {
                   {t('app.on_duty')}
                 </span>
               </div>
-              <Avatar className="h-10 w-10 border-2 border-background shadow-sm ring-2 ring-primary/10">
-                <AvatarImage src={user?.user_metadata?.avatar_url} alt="User" />
-                <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                  {user?.email?.[0].toUpperCase() || "D"}
-                </AvatarFallback>
-              </Avatar>
             </div>
 
             {/* Action Buttons Group */}
