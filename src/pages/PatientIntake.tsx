@@ -22,8 +22,11 @@ import {
    Heart,
    Thermometer,
    Zap,
-   Navigation
+   Navigation,
+   Download
 } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +43,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { patientSchema, type PatientFormValues } from "@/schemas/patientSchema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import i18n from "@/i18n";
 
 
 
@@ -54,7 +58,7 @@ interface HospitalData {
 
 export default function PatientIntake() {
   const { t } = useTranslation();
-  const { predict, loading, result, setResult } = useTriage();
+  const { predict, selfCheckIn, loading, result, setResult } = useTriage();
   const [step, setStep] = useState<"form" | "result" | "self-check-in">("form");
   
   const form = useForm<PatientFormValues>({
@@ -104,6 +108,221 @@ export default function PatientIntake() {
 
     const { name, Age, Gender, ...others } = extracted as any;
     setExtractedData(prev => ({ ...prev, ...others }));
+  };
+
+  // --- PDF EXPORT LOGIC FOR SELF CHECK-IN ---
+  const handleExportPDF = () => {
+    if (!result) return;
+    
+    // Construct a temporary patient object from form data
+    const values = form.getValues();
+    const activePatient = {
+       id: "SELF-CHECK-IN-" + Math.floor(Math.random() * 10000),
+       name: values.name,
+       age: values.age || 0,
+       gender: values.gender,
+       arrival_mode: "Walk-in",
+       diabetes: null,
+       hypertension: null,
+       heart_disease: null,
+       chief_complaint: values.symptoms,
+       explanation: result.details,
+       risk_label: "LOW",
+       department: result.referral?.department,
+       heart_rate: null,
+       systolic_bp: null,
+       diastolic_bp: null,
+       o2_saturation: null,
+       temperature: null,
+       respiratory_rate: null,
+       pain_score: null,
+       gcs_score: 15
+    };
+
+    // Force English for PDF
+    const tEn = i18n.getFixedT('en');
+
+    const doc = new jsPDF();
+    
+    // --- 1. PROFESSIONAL HEADER ---
+    doc.setFillColor(30, 41, 59); // Dark slate
+    doc.rect(0, 0, 210, 30, 'F');
+
+    // Logo / Title area
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.text(tEn('app.title'), 14, 18);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(200, 200, 200);
+    doc.text(tEn('risk.subtitle'), 14, 24);
+
+    // Meta Data (Top Right)
+    doc.setFontSize(9);
+    doc.text(`${tEn('pdf.date')}:`, 150, 12);
+    doc.text(new Date().toLocaleDateString('en-US').toUpperCase(), 175, 12);
+    
+    doc.text(`${tEn('pdf.time')}:`, 150, 17);
+    doc.text(new Date().toLocaleTimeString('en-US').toUpperCase(), 175, 17);
+
+    doc.text(`${tEn('pdf.case_id')}:`, 150, 22);
+    doc.text(`#${activePatient.id.slice(0, 15).toUpperCase()}`, 175, 22);
+
+    // --- 2. PATIENT IDENTITY ---
+    let currentY = 45;
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(tEn('risk.patient_identity'), 14, currentY);
+    
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, currentY + 2, 196, currentY + 2); // Underline
+
+    const patientData = [
+      [`${tEn('pdf.name')}:  ${activePatient.name}`, `${tEn('pdf.age_sex')}:  ${activePatient.age} / ${activePatient.gender}`],
+      [`${tEn('pdf.arrival')}:  ${activePatient.arrival_mode.toUpperCase()}`, `${tEn('pdf.history')}:  ${tEn('pdf.none_reported')}`]
+    ];
+
+    autoTable(doc, {
+      startY: currentY + 5,
+      body: patientData,
+      theme: 'plain',
+      styles: { fontSize: 10, cellPadding: 3, textColor: 50 },
+      columnStyles: { 0: { cellWidth: 100, fontStyle: 'bold' }, 1: { fontStyle: 'bold' } },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 10;
+
+    // --- 3. SUBJECTIVE: CHIEF COMPLAINT ---
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(tEn('risk.chief_complaint'), 14, currentY);
+    doc.line(14, currentY + 2, 196, currentY + 2);
+
+    // Background box for complaint
+    const complaintText = activePatient.chief_complaint || activePatient.explanation || tEn('risk.no_symptoms');
+    const splitComplaint = doc.splitTextToSize(complaintText, 180);
+    const boxHeight = (splitComplaint.length * 6) + 10;
+
+    doc.setFillColor(248, 250, 252); // Very light slate
+    doc.setDrawColor(226, 232, 240); // Border
+    doc.roundedRect(14, currentY + 5, 182, boxHeight, 2, 2, 'FD');
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(60, 60, 60);
+    doc.text(splitComplaint, 18, currentY + 12);
+
+    currentY += boxHeight + 15;
+
+    // --- 4. OBJECTIVE: VITALS GRID ---
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text(tEn('risk.objective_vitals'), 14, currentY);
+    doc.line(14, currentY + 2, 196, currentY + 2);
+
+    const vitals = [
+      [tEn('triage.hr'), `${activePatient.heart_rate ?? '--'} bpm`, tEn('triage.bp_sys'), `${activePatient.systolic_bp ?? '--'}/${activePatient.diastolic_bp ?? '--'} mmHg`, tEn('triage.spo2'), `${activePatient.o2_saturation ?? '--'}%`],
+      [tEn('triage.temp'), `${activePatient.temperature ?? '--'}°C`, tEn('triage.rr'), `${activePatient.respiratory_rate ?? '--'}/min`, tEn('triage.pain_score'), `${activePatient.pain_score ?? '--'}/10`],
+      [tEn('triage.gcs_score'), `${activePatient.gcs_score ?? '--'}/15`, "", "", "", ""]
+    ];
+
+    autoTable(doc, {
+      startY: currentY + 5,
+      head: [[tEn('pdf.metric'), tEn('pdf.value'), tEn('pdf.metric'), tEn('pdf.value'), tEn('pdf.metric'), tEn('pdf.value')]],
+      body: vitals,
+      theme: 'grid',
+      headStyles: { fillColor: [51, 65, 85], textColor: 255, fontSize: 9, halign: 'center' },
+      bodyStyles: { fontSize: 10, cellPadding: 4, halign: 'center' },
+      columnStyles: { 
+        0: { fontStyle: 'bold', fillColor: 245 }, 
+        2: { fontStyle: 'bold', fillColor: 245 },
+        4: { fontStyle: 'bold', fillColor: 245 }
+      }
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 15;
+
+    // --- 5. PARS ASSESSMENT (The "Conclusion") ---
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(tEn('risk.assessment'), 14, currentY);
+    doc.line(14, currentY + 2, 196, currentY + 2);
+
+    // Dynamic Color for Risk
+    let rColor = [46, 204, 113]; // Green
+    if (activePatient.risk_label === "MEDIUM") rColor = [243, 156, 18]; // Orange
+    if (activePatient.risk_label === "HIGH") rColor = [231, 76, 60]; // Red
+
+    // Risk Badge Box
+    doc.setFillColor(rColor[0], rColor[1], rColor[2]);
+    doc.rect(14, currentY + 8, 40, 20, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text(tEn('risk.triage_level'), 34, currentY + 14, { align: "center" });
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(activePatient.risk_label || "N/A", 34, currentY + 23, { align: "center" });
+
+
+    // Routing Box
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(255, 255, 255);
+    
+    // Calculate best doctor
+    const doctors = result.referral?.doctors || [];
+    const bestDoc = doctors.length > 0 ? doctors.reduce((prev: any, current: any) => (prev.experience > current.experience) ? prev : current, doctors[0]) : null;
+
+    const referralBoxHeight = bestDoc ? 40 : 25;
+    doc.roundedRect(64, currentY + 8, 132, referralBoxHeight, 3, 3); // Border only
+
+    doc.setTextColor(100, 100, 100);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.text(tEn('risk.recommended_dept').toUpperCase(), 70, currentY + 16);
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    const deptKey = activePatient.department || "General_Medicine";
+    // Force English department name
+    const dept = tEn(`departments.${deptKey}`, deptKey.replace(/_/g, " ")).toUpperCase();
+    doc.text(dept, 70, currentY + 24);
+
+    if (bestDoc) {
+       // Separator line
+       doc.setDrawColor(230, 230, 230);
+       doc.line(70, currentY + 28, 186, currentY + 28);
+
+       doc.setTextColor(100, 100, 100);
+       doc.setFontSize(8);
+       doc.setFont("helvetica", "bold");
+       doc.text("RECOMMENDED SPECIALIST", 70, currentY + 35);
+
+       doc.setTextColor(33, 150, 243); // Blue for doctor name
+       doc.setFontSize(12);
+       doc.setFont("helvetica", "bold");
+       doc.text(`${bestDoc.name}`, 70, currentY + 42);
+
+       doc.setTextColor(150, 150, 150);
+       doc.setFontSize(9);
+       doc.setFont("helvetica", "normal");
+       doc.text(`(${bestDoc.experience} Years Exp)`, 130, currentY + 42);
+    }
+    
+    // --- FOOTER ---
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.setFont("helvetica", "normal");
+    doc.text(tEn('risk.footer_note'), 105, pageHeight - 10, { align: "center" });
+
+    doc.save(`PARS_Report_${activePatient.name?.replace(/\s+/g, '_') || "SelfCheckIn"}.pdf`);
   };
 
   const handleVoiceCommand = (command: "stop" | "submit") => {
@@ -260,6 +479,55 @@ export default function PatientIntake() {
     await predict(payload);
   };
 
+  const onSelfCheckInSubmit = async (data: PatientFormValues) => {
+    const payload = {
+      name: data.name,
+      age: data.age,
+      gender: data.gender,
+      symptoms: data.symptoms
+    };
+    
+    // 1. Get Analysis
+    const result = await selfCheckIn(payload);
+    
+    if (result) {
+       setStep("result");
+       
+       // 2. Add to Queue
+       try {
+          const { error } = await supabase.from("patients").insert({
+             name: payload.name,
+             age: payload.age,
+             gender: payload.gender,
+             chief_complaint: payload.symptoms,
+             risk_label: "LOW",
+             risk_score: 0.1,
+             department: result.referral?.department,
+             explanation: result.details,
+             // Default Vitals (NULL for Self Check-In as per requirement)
+             heart_rate: null,
+             systolic_bp: null,
+             diastolic_bp: null,
+             o2_saturation: null,
+             temperature: null,
+             respiratory_rate: null,
+             pain_score: null,
+             gcs_score: 15, // Assumed alert
+             arrival_mode: "Walk-in",
+             diabetes: null,
+             hypertension: null,
+             heart_disease: null,
+             user_id: (await supabase.auth.getUser()).data.user?.id || "00000000-0000-0000-0000-000000000000"
+          });
+          
+          if (error) console.error("Queue Error:", error);
+          else toast.success("Check-In Successful", { description: "Added to main queue." });
+       } catch (err) {
+          console.error("DB Error:", err);
+       }
+    }
+  };
+
   // Store submit function in ref for voice command access
   useEffect(() => {
     submitFormRef.current = () => {
@@ -365,19 +633,21 @@ export default function PatientIntake() {
                         </Label>
                       </div>
 
+                      {/* SELF CHECK-IN BUTTON */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setStep("self-check-in")}
+                        className="h-8 text-xs font-medium border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary"
+                      >
+                        <User className="h-3 w-3 mr-2" /> Self Check-In
+                      </Button>
+
                       {/* VOICE INPUT WITH MODE SELECTOR */}
                       {hasSupport && (
                         <div className="flex items-center gap-2">
                           {/* Voice Mode Selector */}
-                          <select
-                            value={mode}
-                            onChange={(e) => setMode(e.target.value as any)}
-                            className="h-8 px-2 rounded-md bg-background border border-border text-xs font-medium shadow-sm hover:border-primary/50 transition-all"
-                            disabled={isListening || isProcessing}
-                          >
-                            <option value="web">🌐 Web Speech</option>
-                            <option value="whisper">🎙️ Whisper AI</option>
-                          </select>
+                          
 
                           {/* Voice Button */}
                           <button
@@ -605,6 +875,70 @@ export default function PatientIntake() {
               </div>
             </motion.div>
           )}
+          
+          {/* --- VIEW 1.5: SELF CHECK-IN FORM --- */}
+          {step === "self-check-in" && (
+            <motion.div 
+              key="self-check-in"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="w-full max-w-lg flex flex-col"
+            >
+              <div className="rounded-2xl glass-panel shadow-2xl overflow-hidden flex flex-col">
+                <div className="bg-primary/10 border-b border-primary/20 p-4 flex items-center justify-between">
+                   <div className="flex items-center gap-2">
+                      <User className="h-5 w-5 text-primary" />
+                      <h2 className="text-lg font-bold text-foreground">Self Check-In</h2>
+                   </div>
+                   <Button variant="ghost" size="icon" onClick={() => setStep("form")} className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                      <ChevronLeft className="h-4 w-4" />
+                   </Button>
+                </div>
+
+                <div className="p-6">
+                  <form onSubmit={handleHookFormSubmit(onSelfCheckInSubmit)} className="space-y-6">
+                    <div className="space-y-4">
+                       <div className="space-y-2">
+                          <Label htmlFor="sc-name">Full Name</Label>
+                          <Input id="sc-name" {...register("name")} placeholder="Your Name" className="bg-background/50" />
+                          {errors.name && <span className="text-xs text-red-500">{errors.name.message}</span>}
+                       </div>
+                       
+                       <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                             <Label htmlFor="sc-age">Age</Label>
+                             <Input id="sc-age" type="number" {...register("age")} placeholder="Age" className="bg-background/50" />
+                             {errors.age && <span className="text-xs text-red-500">{errors.age.message}</span>}
+                          </div>
+                          <div className="space-y-2">
+                             <Label htmlFor="sc-gender">Gender</Label>
+                             <Select value={formValues.gender} onValueChange={v => setValue("gender", v as any)}>
+                                <SelectTrigger className="bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectContent>
+                                   <SelectItem value="Male">Male</SelectItem>
+                                   <SelectItem value="Female">Female</SelectItem>
+                                   <SelectItem value="Other">Other</SelectItem>
+                                </SelectContent>
+                             </Select>
+                          </div>
+                       </div>
+
+                       <div className="space-y-2">
+                          <Label htmlFor="sc-symptoms">Symptoms</Label>
+                          <Textarea id="sc-symptoms" {...register("symptoms")} placeholder="Briefly describe your symptoms..." className="bg-background/50 min-h-[100px]" />
+                          {errors.symptoms && <span className="text-xs text-red-500">{errors.symptoms.message}</span>}
+                       </div>
+                    </div>
+
+                    <Button type="submit" disabled={loading} className="w-full font-bold">
+                       {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Check In Now"}
+                    </Button>
+                  </form>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           {/* --- VIEW 2: RESULTS (Enhanced with Real Map) --- */}
           {step === "result" && result && (
@@ -620,14 +954,22 @@ export default function PatientIntake() {
                    <h2 className="text-2xl font-bold font-serif-display text-foreground">{t('intake.assessment_complete')}</h2>
                    <p className="text-sm text-muted-foreground">{t('intake.assessment_desc')}</p>
                  </div>
-                 <Button 
-                   variant="outline" 
-                   onClick={() => { setStep("form"); setResult(null); form.reset(); setExtractedData({}); setNearestHospital(null); }}
-                   className="gap-2"
-                 >
-                   <ChevronLeft className="h-4 w-4" /> {t('intake.new_checkin')}
-                 </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleExportPDF}
+                    className="gap-2 mr-2"
+                  >
+                    <Download className="h-4 w-4" /> {t('risk.export_pdf')}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => { setStep("form"); setResult(null); form.reset(); setExtractedData({}); setNearestHospital(null); }}
+                    className="gap-2"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> {t('intake.new_checkin')}
+                  </Button>
       </div>
+
 
 
 
@@ -652,34 +994,58 @@ export default function PatientIntake() {
                            {result.isSelfCheckIn ? (
                               <div className="grid grid-cols-1 gap-4">
                                  <div className="rounded-xl border border-border bg-card/60 p-6">
+                                    <div className="w-full bg-green-500/10 border border-green-500/20 p-3 rounded-lg flex items-center justify-center gap-2 mb-4">
+                                       <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
+                                       <span className="font-bold text-green-600 uppercase tracking-widest text-sm">Low Risk Assessment</span>
+                                    </div>
                                     <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2 mb-4">
                                        <Activity className="h-4 w-4 text-primary" /> Available Specialists
                                     </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                       {result.referral?.doctors?.map((doc: any, i: number) => (
-                                          <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-background/50 border border-border">
-                                             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                                                DR
-                                             </div>
-                                             <div>
-                                                <p className="font-bold text-sm">{doc.name}</p>
-                                                <div className="flex items-center gap-2">
-                                                   <Badge variant="outline" className="text-[10px] h-5 border-primary/20 bg-primary/5 text-primary">
-                                                      {result.referral?.department}
-                                                   </Badge>
-                                                   <span className="text-[10px] text-green-500 font-medium flex items-center gap-1">
-                                                      <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span> Available
-                                                   </span>
+                                       {(() => {
+                                          const doctors = result.referral?.doctors || [];
+                                          const maxExp = Math.max(...doctors.map((d: any) => d.experience || 0));
+                                          
+                                          return doctors.map((doc: any, i: number) => {
+                                             const isRecommended = doc.experience === maxExp;
+                                             return (
+                                                <div 
+                                                   key={i} 
+                                                   className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
+                                                      isRecommended 
+                                                         ? "bg-primary/10 border-primary/30 shadow-sm relative overflow-hidden" 
+                                                         : "bg-background/50 border-border"
+                                                   }`}
+                                                >
+                                                   {isRecommended && (
+                                                      <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg uppercase tracking-wider">
+                                                         Recommended
+                                                      </div>
+                                                   )}
+                                                   <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
+                                                      DR
+                                                   </div>
+                                                   <div>
+                                                      <p className="font-bold text-sm w-full truncate">{doc.name}</p>
+                                                      <div className="flex items-center gap-2 mt-0.5">
+                                                         <Badge variant="outline" className="text-[10px] h-5 border-primary/20 bg-primary/5 text-primary px-1">
+                                                            {doc.experience}y Exp
+                                                         </Badge>
+                                                         <span className="text-[10px] text-green-500 font-medium flex items-center gap-1">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span> Available
+                                                         </span>
+                                                      </div>
+                                                   </div>
                                                 </div>
-                                             </div>
-                                          </div>
-                                       )) || <p className="text-sm text-muted-foreground">No specific doctor assigned. Please wait at the front desk.</p>}
+                                             );
+                                          });
+                                       })() || <p className="text-sm text-muted-foreground">No specific doctor assigned. Please wait at the front desk.</p>}
                                     </div>
 
                                     <div className="mt-6 p-4 rounded-lg bg-primary/5 border border-primary/10 text-center">
-                                       <h4 className="font-bold text-primary mb-1">You are in the Queue</h4>
-                                       <p className="text-xs text-muted-foreground">
-                                          Please enter the waiting area. Your estimated wait time is <strong>10 minutes</strong>.
+                                       <h4 className="font-bold text-primary mb-1">Status Confirmed</h4>
+                                       <p className="text-sm font-medium text-foreground">
+                                          You are in the queue.
                                        </p>
                                     </div>
                                  </div>
@@ -749,61 +1115,64 @@ export default function PatientIntake() {
                               </div>
                            )}
 
-                           {/* 3. EMERGENCY ACTIONS ROW */}
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {/* CALL AMBULANCE */}
-                              <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 flex items-center gap-4">
-                                 <div className="h-12 w-12 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
-                                    <Ambulance className="h-6 w-6 text-red-500" />
-                                 </div>
-                                 <div>
-                                    <h4 className="font-bold text-red-500">Call Ambulance</h4>
-                                    <p className="text-xs text-red-400/80 mb-2">Immediate dispatch.</p>
-                                    <Button size="sm" variant="destructive" className="w-full bg-red-500 hover:bg-red-600" onClick={handleCallAmbulance}>
-                                       Call 108 Now
-                                    </Button>
-                                 </div>
-                              </div>
+                           {/* 3. EMERGENCY ACTIONS ROW (Hidden in Self Check-In) */}
+                           {!result.isSelfCheckIn && (
+                              <>
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* CALL AMBULANCE */}
+                                    <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 flex items-center gap-4">
+                                       <div className="h-12 w-12 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                                          <Ambulance className="h-6 w-6 text-red-500" />
+                                       </div>
+                                       <div>
+                                          <h4 className="font-bold text-red-500">Call Ambulance</h4>
+                                          <p className="text-xs text-red-400/80 mb-2">Immediate dispatch.</p>
+                                          <Button size="sm" variant="destructive" className="w-full bg-red-500 hover:bg-red-600" onClick={handleCallAmbulance}>
+                                             Call 108 Now
+                                          </Button>
+                                       </div>
+                                    </div>
 
-                              {/* NOTIFY CONTACT */}
-                              <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 flex items-center gap-4">
-                                 <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
-                                    <Phone className="h-6 w-6 text-blue-500" />
+                                    {/* NOTIFY CONTACT */}
+                                    <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 flex items-center gap-4">
+                                       <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
+                                          <Phone className="h-6 w-6 text-blue-500" />
+                                       </div>
+                                       <div className="flex-1">
+                                          <h4 className="font-bold text-blue-500">Notify Emergency Contact</h4>
+                                          <p className="text-xs text-blue-400/80 mb-2">{formValues.emergencyName || "Family/Friend"}</p>
+                                          <Button size="sm" variant="default" className="w-full bg-blue-500 hover:bg-blue-600" onClick={handleSendSMS} disabled={sendingSms}>
+                                             {sendingSms ? <Loader2 className="h-3 w-3 animate-spin" /> : "Send SMS Alert"}
+                                          </Button>
+                                       </div>
+                                    </div>
                                  </div>
-                                 <div className="flex-1">
-                                    <h4 className="font-bold text-blue-500">Notify Emergency Contact</h4>
-                                    <p className="text-xs text-blue-400/80 mb-2">{formValues.emergencyName || "Family/Friend"}</p>
-                                    <Button size="sm" variant="default" className="w-full bg-blue-500 hover:bg-blue-600" onClick={handleSendSMS} disabled={sendingSms}>
-                                       {sendingSms ? <Loader2 className="h-3 w-3 animate-spin" /> : "Send SMS Alert"}
-                                    </Button>
-                                 </div>
-                              </div>
-                           </div>
 
-                           {/* 4. WEARABLE (Dummy) */}
-                           {/* 4. WEARABLE (Dummy) */}
-                           {!wearableConnected ? (
-                              <div className="rounded-xl border border-dashed border-border bg-black/5 p-6 flex items-center justify-between">
-                                 <div className="flex items-center gap-4">
-                                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center"><Activity className="h-5 w-5 text-primary" /></div>
-                                    <div><h4 className="font-bold text-sm">Wearable Device</h4><p className="text-xs text-muted-foreground">{t('intake.sync_desc')}</p></div>
-                                 </div>
-                                 <Button size="sm" onClick={handleConnectWearable} disabled={connecting}>{connecting ? "Connecting..." : "Connect"}</Button>
-                              </div>
-                           ) : (
-                              <motion.div
-                                 initial={{ opacity: 0, scale: 0.95 }}
-                                 animate={{ opacity: 1, scale: 1 }}
-                                 className="space-y-2"
-                              >
-                                 <div className="flex items-center justify-between px-2">
-                                    <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                                       <Activity className="h-4 w-4 text-green-500" /> Live Vitals Stream
-                                    </h3>
-                                    <span className="text-[10px] font-mono text-green-500 animate-pulse">● LIVE</span>
-                                 </div>
-                                 <VitalsMonitor />
-                              </motion.div>
+                                 {/* 4. WEARABLE (Dummy) */}
+                                 {!wearableConnected ? (
+                                    <div className="rounded-xl border border-dashed border-border bg-black/5 p-6 flex items-center justify-between">
+                                       <div className="flex items-center gap-4">
+                                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center"><Activity className="h-5 w-5 text-primary" /></div>
+                                          <div><h4 className="font-bold text-sm">Wearable Device</h4><p className="text-xs text-muted-foreground">{t('intake.sync_desc')}</p></div>
+                                       </div>
+                                       <Button size="sm" onClick={handleConnectWearable} disabled={connecting}>{connecting ? "Connecting..." : "Connect"}</Button>
+                                    </div>
+                                 ) : (
+                                    <motion.div
+                                       initial={{ opacity: 0, scale: 0.95 }}
+                                       animate={{ opacity: 1, scale: 1 }}
+                                       className="space-y-2"
+                                    >
+                                       <div className="flex items-center justify-between px-2">
+                                          <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                                             <Activity className="h-4 w-4 text-green-500" /> Live Vitals Stream
+                                          </h3>
+                                          <span className="text-[10px] font-mono text-green-500 animate-pulse">● LIVE</span>
+                                       </div>
+                                       <VitalsMonitor />
+                                    </motion.div>
+                                 )}
+                              </>
                            )}
 
 
@@ -811,128 +1180,7 @@ export default function PatientIntake() {
                   </motion.div>
                )}
 
-               {/* --- VIEW 3: SELF CHECK-IN MODAL --- */}
-               {step === "self-check-in" && (
-                  <motion.div
-                     key="self-check-in"
-                     initial={{ opacity: 0, scale: 0.95 }}
-                     animate={{ opacity: 1, scale: 1 }}
-                     exit={{ opacity: 0, scale: 0.95 }}
-                     className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
-                  >
-                     <div className="w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col">
-                        <div className="p-6 border-b border-border bg-muted/20 flex items-center justify-between">
-                           <div>
-                              <h2 className="text-xl font-bold">Self Check-In</h2>
-                              <p className="text-xs text-muted-foreground">For non-emergency cases only.</p>
-                           </div>
-                           <Button variant="ghost" size="icon" onClick={() => setStep("form")}>✕</Button>
-                        </div>
 
-                        <div className="p-6 space-y-4">
-                           <div className="space-y-2">
-                              <Label>Full Name</Label>
-                              <Input
-                                 placeholder="e.g. John Doe"
-                                 {...register("name")}
-                              />
-                           </div>
-                           <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                 <Label>Age</Label>
-                                 <Input
-                                    type="number"
-                                    placeholder="30"
-                                    {...register("age")}
-                                 />
-                              </div>
-                              <div className="space-y-2">
-                                 <Label>Gender</Label>
-                                 <Select value={watch("gender")} onValueChange={v => setValue("gender", v as any)}>
-                                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                                    <SelectContent>
-                                       <SelectItem value="Male">Male</SelectItem>
-                                       <SelectItem value="Female">Female</SelectItem>
-                                       <SelectItem value="Other">Other</SelectItem>
-                                    </SelectContent>
-                                 </Select>
-                              </div>
-                           </div>
-                           <div className="space-y-2">
-                              <Label>Symptoms</Label>
-                              <Textarea
-                                 placeholder="Briefly describe your symptoms..."
-                                 rows={3}
-                                 {...register("symptoms")}
-                              />
-                           </div>
-                        </div>
-
-                        <div className="p-6 border-t border-border bg-muted/20">
-                           <Button
-                              className="w-full"
-                              onClick={async () => {
-                                 const values = form.getValues();
-                                 const payload = {
-                                    name: values.name,
-                                    age: values.age ? Number(values.age) : 30,
-                                    gender: values.gender || "Male",
-                                    symptoms: values.symptoms || "General checkup"
-                                 };
-
-                                 try {
-                                    // 1. Call simplified endpoint
-                                    const res = await fetch(`${import.meta.env.VITE_FASTAPI_URL}/self-check-in`, {
-                                       method: "POST",
-                                       headers: { "Content-Type": "application/json" },
-                                       body: JSON.stringify(payload)
-                                    });
-                                    const data = await res.json();
-
-                                    // 2. Add to Supabase Queue (Real Queue Integration)
-                                    const { error: dbError } = await supabase.from("patients").insert({
-                                       name: payload.name,
-                                       age: payload.age,
-                                       gender: payload.gender,
-                                       chief_complaint: payload.symptoms,
-                                       risk_label: "LOW",
-                                       risk_score: 0.1,
-                                       department: data.referral?.department,
-                                       explanation: data.details,
-                                       // Default Vitals for Self Check-In (Stable)
-                                       heart_rate: 75,
-                                       systolic_bp: 120,
-                                       diastolic_bp: 80,
-                                       o2_saturation: 98,
-                                       temperature: 37,
-                                       respiratory_rate: 16,
-                                       pain_score: 0,
-                                       gcs_score: 15,
-                                       arrival_mode: "Walk-in",
-                                       user_id: (await supabase.auth.getUser()).data.user?.id || "00000000-0000-0000-0000-000000000000"
-                                    });
-
-                                    if (dbError) console.error("Queue Error:", dbError);
-
-                                    // 3. Mark as Self Check-In for View Logic
-                                    setResult({ ...data, isSelfCheckIn: true });
-                                    setStep("result");
-                                    toast.success("Check-In Successful", { description: "You have been added to the queue." });
-
-                                 } catch (err) {
-                                    console.error(err);
-                                    toast.error("Check-In Failed");
-                                 }
-                              }}
-                           >
-                              Confirm Check-In
-                           </Button>
-                        </div>
-                     </div>
-                  
-
-               </motion.div>
-            )}
 
             </AnimatePresence>
          </main>

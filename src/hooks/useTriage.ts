@@ -73,7 +73,38 @@ export function useTriage() {
     }
   };
 
-  return { predict, loading, error, result, setResult };
+  const selfCheckIn = async (data: SelfCheckInInput): Promise<TriageResult | null> => {
+    setLoading(true);
+    setResult(null);
+    setError(null);
+    try {
+      const response = await fetch(`${API_URL}/self-check-in`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      const triageResult: TriageResult = await response.json();
+      const finalResult = { ...triageResult, isSelfCheckIn: true };
+      setResult(finalResult);
+      return finalResult;
+    } catch (err: any) {
+      console.error("[useTriage] Self Check-In Failed:", err);
+      setError(err.message || "Failed to process self check-in");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { predict, selfCheckIn, loading, error, result, setResult };
+}
+
+export interface SelfCheckInInput {
+  name: string;
+  age: number;
+  gender: string;
+  symptoms: string;
 }
 
 function clientSideFallback(data: PatientInput): TriageResult {

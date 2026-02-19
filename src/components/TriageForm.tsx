@@ -144,8 +144,8 @@ export default function TriageForm({ onSubmit, loading }: Props) {
               <input type="file" accept=".pdf" className="hidden" onChange={handleFileUpload} />
               <div
                 className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${isUploading
-                    ? "cursor-wait bg-muted text-muted-foreground"
-                    : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
+                  ? "cursor-wait bg-muted text-muted-foreground"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
                   }`}
               >
                 {isUploading ? (
@@ -170,7 +170,7 @@ export default function TriageForm({ onSubmit, loading }: Props) {
           <Input
             value={form.name}
             onChange={(e) => set("name", e.target.value)}
-            placeholder="e.g. John Doe"
+            placeholder="Enter your name"
             className="border-2 border-border bg-secondary text-foreground placeholder:text-muted-foreground/40"
           />
         </div>
@@ -195,7 +195,7 @@ export default function TriageForm({ onSubmit, loading }: Props) {
             <Textarea
               value={form.Chief_Complaint || ""}
               onChange={(e) => set("Chief_Complaint", e.target.value)}
-              placeholder="e.g. Chest pain radiating to left arm, started 2 hours ago..."
+              placeholder="Explain your complaint/symptoms briefly"
               className="border-2 border-border bg-secondary text-foreground placeholder:text-muted-foreground/40 min-h-[80px]"
             />
           </div>
@@ -211,7 +211,6 @@ export default function TriageForm({ onSubmit, loading }: Props) {
               onChange={(e) => set("Age", e.target.value === "" ? undefined : +e.target.value)}
               min={0}
               max={120}
-              placeholder="e.g. 45"
               className="border-border bg-secondary text-foreground placeholder:text-muted-foreground/40"
             />
           </div>
@@ -219,11 +218,12 @@ export default function TriageForm({ onSubmit, loading }: Props) {
             <Label className="text-xs text-white">{t('triage.gender')}</Label>
             <Select value={form.Gender} onValueChange={(v) => set("Gender", v)}>
               <SelectTrigger className="border-border bg-secondary text-foreground data-[placeholder]:text-muted-foreground/40">
-                <SelectValue placeholder="e.g. Male" />
+                <SelectValue placeholder="Gender" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Male">{t('triage.male')}</SelectItem>
                 <SelectItem value="Female">{t('triage.female')}</SelectItem>
+                <SelectItem value="Other">{t('triage.other')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -233,12 +233,12 @@ export default function TriageForm({ onSubmit, loading }: Props) {
         <p className="text-xs font-semibold uppercase tracking-wider text-primary">{t('triage.vitals')}</p>
         <div className="grid grid-cols-2 gap-3">
           {[
-            ["Heart_Rate", `${t('triage.hr')} (bpm)`, 0, 300, "e.g. 80"],
-            ["Systolic_BP", `${t('triage.bp_sys')} (mmHg)`, 0, 300, "e.g. 120"],
-            ["Diastolic_BP", `${t('triage.bp_dia')} (mmHg)`, 0, 200, "e.g. 80"],
-            ["O2_Saturation", `${t('triage.spo2')} (%)`, 0, 100, "e.g. 98"],
-            ["Temperature", `${t('triage.temp')} (°C)`, 30, 45, "e.g. 37.0"],
-            ["Respiratory_Rate", t('triage.rr'), 0, 60, "e.g. 16"],
+            ["Heart_Rate", `${t('triage.hr')} (bpm)`, 0, 300, ""],
+            ["Systolic_BP", `${t('triage.bp_sys')} (mmHg)`, 0, 300, ""],
+            ["Diastolic_BP", `${t('triage.bp_dia')} (mmHg)`, 0, 200, ""],
+            ["O2_Saturation", `${t('triage.spo2')} (%)`, 0, 100, ""],
+            ["Temperature", `${t('triage.temp')} (°C)`, 30, 45, "In Degree Celsius"],
+            ["Respiratory_Rate", t('triage.rr'), 0, 60, "(0-30)"],
           ].map(([key, label, min, max, placeholder]) => (
             <div key={key as string} className="space-y-1">
               <Label className="text-xs text-white">{label as string}</Label>
@@ -267,8 +267,7 @@ export default function TriageForm({ onSubmit, loading }: Props) {
               onChange={(e) => set("Pain_Score", e.target.value === "" ? undefined : +e.target.value)}
               min={0}
               max={10}
-              placeholder="e.g. 0"
-              className="border-border bg-secondary text-foreground placeholder:text-muted-foreground/40"
+              className="border-border bg-secondary text-foreground :text-muted-foreground/40"
             />
           </div>
           <div className="space-y-1">
@@ -279,7 +278,7 @@ export default function TriageForm({ onSubmit, loading }: Props) {
               onChange={(e) => set("GCS_Score", e.target.value === "" ? undefined : +e.target.value)}
               min={3}
               max={15}
-              placeholder="e.g. 15"
+              placeholder="Level of Consciousness"
               className="border-border bg-secondary text-foreground placeholder:text-muted-foreground/40"
             />
           </div>
@@ -289,7 +288,7 @@ export default function TriageForm({ onSubmit, loading }: Props) {
           <Label className="text-xs text-white">{t('triage.arrival_mode')}</Label>
           <Select value={form.Arrival_Mode} onValueChange={(v) => set("Arrival_Mode", v)}>
             <SelectTrigger className="border-border bg-secondary text-foreground data-[placeholder]:text-muted-foreground/40">
-              <SelectValue placeholder="e.g. Walk-in" />
+              <SelectValue placeholder="Ambulance/Walk-in" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="Walk-in">{t('triage.walk_in')}</SelectItem>

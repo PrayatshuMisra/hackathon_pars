@@ -107,9 +107,9 @@ export default function PatientQueue({ patients, selectedId, onSelect, loading }
                 </div>
               </div>
               <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                <span>HR {p.heart_rate}</span>
-                <span>BP {p.systolic_bp}/{p.diastolic_bp}</span>
-                <span>O₂ {p.o2_saturation}%</span>
+                {p.heart_rate && <span>HR {p.heart_rate}</span>}
+                {p.systolic_bp && <span>BP {p.systolic_bp}/{p.diastolic_bp}</span>}
+                {p.o2_saturation && <span>O₂ {p.o2_saturation}%</span>}
                 <span className="ml-auto flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   {new Date(p.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

@@ -200,9 +200,9 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
     doc.line(14, currentY + 2, 196, currentY + 2);
 
     const vitals = [
-      [tEn('triage.hr'), `${activePatient.heart_rate} bpm`, tEn('triage.bp_sys'), `${activePatient.systolic_bp}/${activePatient.diastolic_bp} mmHg`, tEn('triage.spo2'), `${activePatient.o2_saturation}%`],
-      [tEn('triage.temp'), `${activePatient.temperature}°C`, tEn('triage.rr'), `${activePatient.respiratory_rate}/min`, tEn('triage.pain_score'), `${activePatient.pain_score}/10`],
-      [tEn('triage.gcs_score'), `${activePatient.gcs_score}/15`, "", "", "", ""]
+      [tEn('triage.hr'), `${activePatient.heart_rate ?? '--'} bpm`, tEn('triage.bp_sys'), `${activePatient.systolic_bp ?? '--'}/${activePatient.diastolic_bp ?? '--'} mmHg`, tEn('triage.spo2'), `${activePatient.o2_saturation ?? '--'}%`],
+      [tEn('triage.temp'), `${activePatient.temperature ?? '--'}°C`, tEn('triage.rr'), `${activePatient.respiratory_rate ?? '--'}/min`, tEn('triage.pain_score'), `${activePatient.pain_score ?? '--'}/10`],
+      [tEn('triage.gcs_score'), `${activePatient.gcs_score ?? '--'}/15`, "", "", "", ""]
     ];
 
     autoTable(doc, {
@@ -243,23 +243,51 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
     doc.setFont("helvetica", "bold");
     doc.text(activePatient.risk_label || "N/A", 34, currentY + 23, { align: "center" });
 
-    // Routing Box
-    doc.setDrawColor(0);
-    doc.setFillColor(255, 255, 255);
-    doc.rect(54, currentY + 8, 142, 20); // Border only
 
-    doc.setTextColor(80, 80, 80);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text(tEn('risk.recommended_dept'), 60, currentY + 14);
+    // Routing Box
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(255, 255, 255);
+
+    // Calculate best doctor
+    const doctors = result?.referral?.doctors || [];
+    const bestDoc = doctors.length > 0 ? doctors.reduce((prev: any, current: any) => (prev.experience > current.experience) ? prev : current, doctors[0]) : null;
+
+    const docBoxHeight = bestDoc ? 40 : 25;
+    doc.roundedRect(64, currentY + 8, 132, docBoxHeight, 3, 3); // Border only
+
+    doc.setTextColor(100, 100, 100);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.text(tEn('risk.recommended_dept').toUpperCase(), 70, currentY + 16);
 
     doc.setTextColor(0, 0, 0);
-    doc.setFontSize(16);
+    doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     const deptKey = activePatient.department || "General_Medicine";
     // Force English department name
     const dept = tEn(`departments.${deptKey}`, deptKey.replace(/_/g, " ")).toUpperCase();
-    doc.text(dept, 60, currentY + 23);
+    doc.text(dept, 70, currentY + 24);
+
+    if (bestDoc) {
+       // Separator line
+       doc.setDrawColor(230, 230, 230);
+       doc.line(70, currentY + 28, 186, currentY + 28);
+
+       doc.setTextColor(100, 100, 100);
+       doc.setFontSize(8);
+       doc.setFont("helvetica", "bold");
+       doc.text("RECOMMENDED SPECIALIST", 70, currentY + 35);
+
+       doc.setTextColor(33, 150, 243); // Blue for doctor name
+       doc.setFontSize(12);
+       doc.setFont("helvetica", "bold");
+       doc.text(`${bestDoc.name}`, 70, currentY + 42);
+
+       doc.setTextColor(150, 150, 150);
+       doc.setFontSize(9);
+       doc.setFont("helvetica", "normal");
+       doc.text(`(${bestDoc.experience} Years Exp)`, 130, currentY + 42);
+    }
 
     // --- FOOTER ---
     const pageHeight = doc.internal.pageSize.height;
@@ -439,7 +467,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
               />
               <div className="mb-3 flex items-center gap-2">
                 <Info className="h-4 w-4 text-zinc-500" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">{t('risk.ai_assessment')}</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">{t('risk.pars_assessment')}</h3>
               </div>
               <p className="text-sm leading-relaxed text-zinc-300 font-mono min-h-[3rem]">
                 <span className="mr-2 text-zinc-500">{">"}</span>
