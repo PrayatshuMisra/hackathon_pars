@@ -1,8 +1,6 @@
 import os
 import time
 from supabase import create_client, Client
-from sentence_transformers import SentenceTransformer, util
-import torch
 
 
 # ============================================================
@@ -198,28 +196,40 @@ MODEL_NAMES = [
 MODELS = []
 DEPT_EMBEDDINGS_MAP = {}
 
-print("[PARS] Loading NLP Models...")
-
-for name in MODEL_NAMES:
+def init_nlp_models():
+    """Initializes heavy NLP models in the background"""
+    global MODELS, DEPT_EMBEDDINGS_MAP
+    if MODELS:
+        return
+        
+    print("[PARS] Loading NLP Models in background...")
     try:
-        model = SentenceTransformer(name)
-        MODELS.append(model)
-        print(f"[PARS] Loaded model: {name}")
-    except Exception as e:
-        print(f"[PARS] Failed loading {name}: {e}")
+        from sentence_transformers import SentenceTransformer, util
+        import torch
+    except ImportError as e:
+        print(f"[PARS] Failed to import NLP dependencies: {e}")
+        return
 
-if not MODELS:
-    print("[PARS] WARNING: No models loaded successfully.")
-else:
-    # Precompute department embeddings per model
-    for model in MODELS:
+    for name in MODEL_NAMES:
         try:
-            DEPT_EMBEDDINGS_MAP[model] = model.encode(
-                DEPARTMENTS,
-                convert_to_tensor=True
-            )
+            model = SentenceTransformer(name)
+            MODELS.append(model)
+            print(f"[PARS] Loaded model: {name}")
         except Exception as e:
-            print(f"[PARS] Error encoding departments for model: {e}")
+            print(f"[PARS] Failed loading {name}: {e}")
+
+    if not MODELS:
+        print("[PARS] WARNING: No models loaded successfully.")
+    else:
+        # Precompute department embeddings per model
+        for model in MODELS:
+            try:
+                DEPT_EMBEDDINGS_MAP[model] = model.encode(
+                    DEPARTMENTS,
+                    convert_to_tensor=True
+                )
+            except Exception as e:
+                print(f"[PARS] Error encoding departments for model: {e}")
 
 
 # ============================================================
@@ -269,6 +279,8 @@ def get_department(complaint: str) -> str:
                 convert_to_tensor=True
             )
             dept_embeddings = DEPT_EMBEDDINGS_MAP[active_model]
+            
+            from sentence_transformers import util
             cos_scores = util.cos_sim(
                 complaint_embedding,
                 dept_embeddings

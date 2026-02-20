@@ -9,12 +9,11 @@ Place your trained model files in the same directory:
 import numpy as np
 import pandas as pd
 import joblib
-import tensorflow as tf
-
 
 class TriageModel:
     def __init__(self, model_path="triage_model_nn.keras", preprocessor_path="preprocessor_nn.pkl"):
         try:
+            import tensorflow as tf
             # Use os.path.dirname to make paths relative to this script
             import os
             base_dir = os.path.dirname(os.path.abspath(__file__))

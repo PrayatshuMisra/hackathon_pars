@@ -8,11 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 from typing import Optional, List, Dict, Any
-from ml_service import TriageModel
 from fastapi import FastAPI, UploadFile, File
 from doc_parser import extract_vitals_from_pdf
+# We will import these dynamically to avoid blocking startup
 from dept_service import get_referral, get_department
-from audio_service import AudioService
 import os
 import shutil
 
@@ -39,11 +38,16 @@ import threading
 # Initialize globals
 model = None
 audio_service = None
+extract_vitals_from_pdf = None
 
 def load_models_background():
-    global model, audio_service
-    # Load ML Model
+    global model, audio_service, extract_vitals_from_pdf
+    
+    print("[PARS] Starting background loading of heavy ML modules...")
+    
+    # Import heavy modules inside thread to prevent blocking Uvicorn startup
     try:
+        from ml_service import TriageModel
         model = TriageModel()
         print("[PARS] Model loaded successfully.")
     except Exception as e:
@@ -52,11 +56,28 @@ def load_models_background():
 
     # Load Audio Service
     try:
+        from audio_service import AudioService
         audio_service = AudioService()
         print("[PARS] Audio Service loaded successfully.")
     except Exception as e:
         print(f"[PARS] Audio Service Error: {e}")
         audio_service = None
+        
+    # Load Doc Parser
+    try:
+        from doc_parser import extract_vitals_from_pdf as _extract
+        extract_vitals_from_pdf = _extract
+        print("[PARS] Doc Parser loaded successfully.")
+    except Exception as e:
+        print(f"[PARS] Doc Parser Error: {e}")
+        
+    # Init NLP models for departments
+    try:
+        from dept_service import init_nlp_models
+        init_nlp_models()
+        print("[PARS] NLP Models for Departments initialized successfully.")
+    except Exception as e:
+        print(f"[PARS] Dept Service NLP config Error: {e}")
 
 # Start background thread for loading models
 threading.Thread(target=load_models_background, daemon=True).start()

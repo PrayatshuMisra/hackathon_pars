@@ -1,24 +1,14 @@
 import os
 import re
 import json
-import google.generativeai as genai
-from pypdf import PdfReader
-from io import BytesIO
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
-# Configure Gemini
-GEMINI_API_KEY = os.getenv("VITE_GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-else:
-    print("[PARS] WARNING: GEMINI_API_KEY not found in environment variables.")
+# Configure Gemini will happen on-demand inside extraction functions
 
 def extract_text_from_pdf(file_bytes):
     """Extracts raw text from a PDF file."""
     try:
+        from pypdf import PdfReader
+        from io import BytesIO
+        
         reader = PdfReader(BytesIO(file_bytes))
         text = ""
         for page in reader.pages:
@@ -37,19 +27,21 @@ def extract_vitals_from_pdf(file_bytes):
     text = extract_text_from_pdf(file_bytes)
     print(f"[PARS] Extracted text length: {len(text)}")
     
-    # If text is empty, it might be a scan.
-    # For now, we unfortunately rely on text. If empty, we can't do much without OCR/Vision.
-    # BUT, let's try to send a "This is a scanned document" prompt if we were using 1.5-pro/vision.
-    # Since we are using 2.0-flash, it supports multimodal but we need to pass image parts, not text.
-    # For this fix, let's just Log it clearly.
+    # Import dependencies locally to avoid blocking Uvicorn startup
+    import os
+    import google.generativeai as genai
+    from dotenv import load_dotenv
     
+    # Load environment variables
+    load_dotenv()
+    GEMINI_API_KEY = os.getenv("VITE_GEMINI_API_KEY")
+    if GEMINI_API_KEY:
+        genai.configure(api_key=GEMINI_API_KEY)
+    else:
+        print("[PARS] WARNING: GEMINI_API_KEY not found in environment variables.")
+
     if not text or len(text.strip()) < 50:
         print("[PARS] WARNING: Extracted text is very short or empty. Likely a scanned PDF/Image.")
-        # Proceed anyway? Gemini might halluncinate if we send empty text. 
-        # Better: Return specific error so frontend knows.
-        # OR: Try to use a "cleaner" approach if I can (e.g. sending the bytes?).
-        # genai.GenerativeModel.generate_content supports 'blob' for PDF?
-        # Yes, standard Gemini API supports PDF as a "part".
         
     if not GEMINI_API_KEY:
         print("[PARS] Fallback to legacy regex parser (No API Key)")

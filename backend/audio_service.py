@@ -1,4 +1,3 @@
-import whisper
 import os
 import warnings
 
@@ -9,6 +8,7 @@ class AudioService:
     def __init__(self):
         print("[PARS] Loading Whisper model (this may take a moment)...")
         try:
+            import whisper
             # "base" is a good balance of speed vs accuracy for English
             # Use "small" if accuracy is poor, "tiny" if too slow
             self.model = whisper.load_model("base")
