@@ -9,15 +9,31 @@ Place your trained model files in the same directory:
 import numpy as np
 import pandas as pd
 import joblib
+import os
+
+# Optimize TensorFlow memory usage for free-tier constraints (512MB RAM)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress TF logging
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0' # Disable OneDNN to save memory
+# Limit the number of threads TF can use
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['TF_NUM_INTEROP_THREADS'] = '1'
+os.environ['TF_NUM_INTRAOP_THREADS'] = '1'
 
 class TriageModel:
     def __init__(self, model_path="triage_model_nn.keras", preprocessor_path="preprocessor_nn.pkl"):
         try:
             import tensorflow as tf
+            
+            # Configure TF to not allocate all memory
+            tf.config.threading.set_inter_op_parallelism_threads(1)
+            tf.config.threading.set_intra_op_parallelism_threads(1)
+            
+            # Force CPU usage only as GPUs often pre-allocate memory
+            tf.config.set_visible_devices([], 'GPU')
+
             import zipfile
             import h5py
             # Use os.path.dirname to make paths relative to this script
-            import os
             base_dir = os.path.dirname(os.path.abspath(__file__))
             
             # Construct absolute paths

@@ -188,9 +188,8 @@ def calculate_keyword_score(complaint: str, department: str) -> float:
 # ============================================================
 
 MODEL_NAMES = [
-    "multi-qa-distilbert-cos-v1",
-    "all-MiniLM-L6-v2",
-    "paraphrase-MiniLM-L6-v2"
+    # Only loading one model to save memory on 512MB RAM instances (Render Free Tier)
+    "all-MiniLM-L6-v2"
 ]
 
 MODELS = []
