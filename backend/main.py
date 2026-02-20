@@ -34,21 +34,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load model on startup
-try:
-    model = TriageModel()
-    print("[PARS] Model loaded successfully.")
-except Exception as e:
-    print(f"[PARS] WARNING: Could not load model: {e}")
-    model = None
+import threading
 
-# Load Audio Service
-try:
-    audio_service = AudioService()
-except Exception as e:
-    print(f"[PARS] Audio Service Error: {e}")
-    audio_service = None
+# Initialize globals
+model = None
+audio_service = None
 
+def load_models_background():
+    global model, audio_service
+    # Load ML Model
+    try:
+        model = TriageModel()
+        print("[PARS] Model loaded successfully.")
+    except Exception as e:
+        print(f"[PARS] WARNING: Could not load model: {e}")
+        model = None
+
+    # Load Audio Service
+    try:
+        audio_service = AudioService()
+        print("[PARS] Audio Service loaded successfully.")
+    except Exception as e:
+        print(f"[PARS] Audio Service Error: {e}")
+        audio_service = None
+
+# Start background thread for loading models
+threading.Thread(target=load_models_background, daemon=True).start()
 
 class PatientInput(BaseModel):
     Age: int
