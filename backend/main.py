@@ -123,29 +123,67 @@ def predict(patient: PatientInput):
         o2 = patient.O2_Saturation
         gcs = patient.GCS_Score
         
-        # Determine risk based on critical thresholds
-        critical_reasons = []
-        if hr > 180 or hr < 40:
-            critical_reasons.append("Abnormal heart rate")
-        if systolic < 70:
-            critical_reasons.append("Severe hypotension")
-        if o2 < 85:
-            critical_reasons.append("Critical hypoxia")
-        if gcs <= 8:
-            critical_reasons.append("Reduced consciousness")
+        # Determine risk based on continuous scoring
+        base_score = 0.05
+        penalties = 0.0
+        details_list = []
         
-        if critical_reasons:
-            risk_score = 0.95
+        # Heart Rate logic
+        if hr > 180 or hr < 40:
+            penalties += 0.60
+            details_list.append("Abnormal heart rate")
+        elif hr > 100:
+            penalties += min(0.30, (hr - 100) * 0.005)
+            details_list.append("Elevated heart rate")
+        elif hr < 60:
+            penalties += min(0.20, (60 - hr) * 0.01)
+            
+        # Blood pressure logic
+        if systolic < 70:
+            penalties += 0.60
+            details_list.append("Severe hypotension")
+        elif systolic < 90:
+            penalties += min(0.30, (90 - systolic) * 0.015)
+            details_list.append("Low blood pressure")
+        elif systolic > 160:
+            penalties += min(0.30, (systolic - 160) * 0.005)
+            details_list.append("High blood pressure")
+            
+        # Oxygen logic
+        if o2 < 85:
+            penalties += 0.60
+            details_list.append("Critical hypoxia")
+        elif o2 < 94:
+            penalties += min(0.30, (94 - o2) * 0.05)
+            details_list.append("Low oxygen saturation")
+            
+        # GCS logic
+        if gcs <= 8:
+            penalties += 0.80
+            details_list.append("Reduced consciousness")
+        elif gcs < 15:
+            penalties += min(0.40, (15 - gcs) * 0.05)
+            
+        # Age penalty
+        if patient.Age and patient.Age > 65:
+            penalties += min(0.15, (patient.Age - 65) * 0.005)
+
+        # Calculate final continuous score
+        risk_score = min(0.99, base_score + penalties)
+        
+        # Assign labels
+        if risk_score >= 0.75:
             risk_label = "HIGH"
-            details = "⚠️ Critical vitals detected: " + ", ".join(critical_reasons)
-        elif hr > 100 or systolic < 90 or o2 < 94:
-            risk_score = 0.55
+        elif risk_score >= 0.40:
             risk_label = "MEDIUM"
-            details = "Elevated vitals requiring attention"
         else:
-            risk_score = 0.15
             risk_label = "LOW"
+            
+        if not details_list:
             details = "Vitals within acceptable range"
+        else:
+            prefix = "⚠️ Critical vitals detected: " if risk_label == "HIGH" else "Elevated vitals requiring attention: "
+            details = prefix + ", ".join(details_list)
         
         result = {
             "risk_score": risk_score,
