@@ -14,6 +14,8 @@ class TriageModel:
     def __init__(self, model_path="triage_model_nn.keras", preprocessor_path="preprocessor_nn.pkl"):
         try:
             import tensorflow as tf
+            import zipfile
+            import h5py
             # Use os.path.dirname to make paths relative to this script
             import os
             base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -22,8 +24,35 @@ class TriageModel:
             model_full_path = os.path.join(base_dir, model_path)
             preprocessor_full_path = os.path.join(base_dir, preprocessor_path)
 
-            # Load model with compile=False to bypass optimizer/loss compatibility issues
-            self.model = tf.keras.models.load_model(model_full_path, compile=False)
+            # Reconstruct model architecture explicitly to avoid Keras 3 -> Keras 2 config incompatibilities
+            self.model = tf.keras.Sequential([
+                tf.keras.layers.Dense(64, activation='relu', input_shape=(19,), name='dense'),
+                tf.keras.layers.Dropout(0.2, name='dropout'),
+                tf.keras.layers.Dense(64, activation='tanh', name='dense_1'),
+                tf.keras.layers.Dropout(0.3, name='dropout_1'),
+                tf.keras.layers.Dense(64, activation='tanh', name='dense_2'),
+                tf.keras.layers.Dropout(0.3, name='dropout_2'),
+                tf.keras.layers.Dense(32, activation='relu', name='dense_3'),
+                tf.keras.layers.Dropout(0.2, name='dropout_3'),
+                tf.keras.layers.Dense(32, activation='relu', name='dense_4'),
+                tf.keras.layers.Dropout(0.2, name='dropout_4'),
+                tf.keras.layers.Dense(1, activation='sigmoid', name='dense_5')
+            ])
+            
+            # Extract Keras 3 weights and load them manually via h5py
+            h5_target = os.path.join(base_dir, 'model.weights.h5')
+            if not os.path.exists(h5_target):
+                with zipfile.ZipFile(model_full_path, 'r') as z:
+                    z.extract('model.weights.h5', base_dir)
+            
+            with h5py.File(h5_target, 'r') as f:
+                for layer in self.model.layers:
+                    if layer.name in f['layers']:
+                        var_group = f['layers'][layer.name].get('vars', {})
+                        if var_group:
+                            weights = [var_group[str(i)][:] for i in range(len(var_group.keys()))]
+                            layer.set_weights(weights)
+
             self.preprocessor = joblib.load(preprocessor_full_path)
             print(f"[PARS] Model loaded from {model_full_path}. Input shape: {self.model.input_shape}")
         except Exception as e:
