@@ -9,10 +9,9 @@ class AudioService:
         print("[PARS] Loading Whisper model (this may take a moment)...")
         try:
             import whisper
-            # "base" is a good balance of speed vs accuracy for English
-            # Use "small" if accuracy is poor, "tiny" if too slow
-            self.model = whisper.load_model("base")
-            print("[PARS] Whisper model loaded successfully.")
+            # "tiny" consumes ~150MB of RAM vs "base" which consumes ~500MB
+            self.model = whisper.load_model("tiny")
+            print("[PARS] Whisper 'tiny' model loaded successfully.")
         except Exception as e:
             print(f"[PARS] CRITICAL: Failed to load Whisper model: {e}")
             self.model = None

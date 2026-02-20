@@ -49,11 +49,17 @@ export function useTriage() {
     setResult(null); // Clear previous result to avoid "flash" of old data
     setError(null);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20-second timeout
+
       const response = await fetch(`${API_URL}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
+
       if (!response.ok) throw new Error(`API error: ${response.status}`);
       const triageResult: TriageResult = await response.json();
       console.log("[useTriage] API Response:", triageResult);
@@ -61,7 +67,7 @@ export function useTriage() {
       return triageResult;
     } catch (err: any) {
       console.error("[useTriage] API Call Failed:", err);
-      const message = err.message || "Failed to connect to triage API";
+      const message = err.name === 'AbortError' ? "Request timed out. Server is waking up." : (err.message || "Failed to connect to triage API");
       setError(message);
       // Fallback: client-side rule-based scoring
       const fallback = clientSideFallback(data);
@@ -78,11 +84,17 @@ export function useTriage() {
     setResult(null);
     setError(null);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20-second timeout
+
       const response = await fetch(`${API_URL}/self-check-in`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
+
       if (!response.ok) throw new Error(`API error: ${response.status}`);
       const triageResult: TriageResult = await response.json();
       const finalResult = { ...triageResult, isSelfCheckIn: true };
@@ -90,8 +102,21 @@ export function useTriage() {
       return finalResult;
     } catch (err: any) {
       console.error("[useTriage] Self Check-In Failed:", err);
-      setError(err.message || "Failed to process self check-in");
-      return null;
+      setError(err.name === 'AbortError' ? "Request timed out" : (err.message || "Failed to process self check-in"));
+
+      // Fallback simple rule for self check-in
+      const fallback: TriageResult = {
+        risk_score: 0.1,
+        risk_label: "LOW",
+        details: `Self check-in completed locally. Based on '${data.symptoms}', please see a general physician.`,
+        referral: {
+          department: "General_Medicine",
+          doctors: []
+        },
+        isSelfCheckIn: true
+      };
+      setResult(fallback);
+      return fallback;
     } finally {
       setLoading(false);
     }
