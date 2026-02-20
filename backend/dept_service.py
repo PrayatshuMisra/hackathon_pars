@@ -205,9 +205,13 @@ def init_nlp_models():
     try:
         from sentence_transformers import SentenceTransformer, util
         import torch
-    except ImportError as e:
+    except ImportError:
+        print("[PARS] sentence-transformers/torch not installed - using keyword-only department matching.")
+        return
+    except Exception as e:
         print(f"[PARS] Failed to import NLP dependencies: {e}")
         return
+
 
     for name in MODEL_NAMES:
         try:
@@ -352,52 +356,62 @@ def get_department_legacy(complaint: str) -> str:
     hospital_map = {
         "Toxicology": [
             "poison", "overdose", "chemical", "toxic", "venom", "venomous",
-            "snake bite", "snakebite", "scorpion", "spider bite", "antidote",
+            "snake bite", "snakebite", "bitten by a snake", "bitten by snake",
+            "snake", "scorpion", "spider bite", "antidote",
             "intoxication", "drug abuse", "ingested", "swallowed poison"
         ],
         "Emergency_Trauma": [
             "accident", "trauma", "bleed", "severe injury", "critical",
-            "hemorrhage", "major wound", "car accident", "gunshot", "stab"
+            "hemorrhage", "major wound", "car accident", "gunshot", "stab",
+            "unconscious", "fell", "hit by"
         ],
         "Cardiology": [
-            "chest pain", "heart", "bp", "palpitations", "cardiac",
-            "heart attack", "angina", "arrhythmia"
+            "chest pain", "heart attack", "cardiac arrest", "cardiac", "angina",
+            "palpitations", "arrhythmia", "tachycardia", "bradycardia",
+            "blood pressure", "high bp", "low bp", "hypertension", "heart"
         ],
         "Neurology": [
             "stroke", "headache", "seizure", "paralysis", "migraine",
-            "dizziness", "numbness", "brain"
+            "dizziness", "dizzy", "numbness", "brain", "confusion",
+            "loss of consciousness", "fainting", "fainted"
+        ],
+        "Psychiatry": [
+            "depression", "depressed", "anxiety", "anxious", "suicide",
+            "suicidal", "panic attack", "panic", "mental health", "psychosis",
+            "bipolar", "ptsd", "hallucination", "stressed", "stress"
+        ],
+        "Urology_Nephrology": [
+            "kidney stone", "kidney infection", "kidney", "urinary tract infection",
+            "urinary tract", "bladder", "uti", "renal", "urine infection",
+            "painful urination", "burning urination"
         ],
         "Gastroenterology": [
             "stomach", "vomiting", "diarrhea", "abdominal", "nausea",
-            "digestive", "gastritis", "ulcer"
+            "digestive", "gastritis", "ulcer", "constipation", "indigestion"
         ],
         "Pulmonology": [
             "cough", "asthma", "breath", "lung", "respiratory",
-            "wheezing", "pneumonia"
+            "wheezing", "pneumonia", "shortness of breath", "bronchitis"
         ],
         "Orthopedics": [
-            "fracture", "bone", "joint", "sprain", "dislocation",
-            "back pain", "muscle pain"
-        ],
-        "Psychiatry": [
-            "depression", "anxiety", "suicide", "suicidal", "panic",
-            "mental health", "psychosis"
+            "fracture", "broken bone", "joint pain", "sprain", "dislocation",
+            "back pain", "muscle pain", "arthritis", "limb"
         ],
         "Dermatology": [
-            "rash", "itch", "skin", "hives", "eczema", "allergy"
+            "rash", "itching", "itch", "skin", "hives", "eczema",
+            "psoriasis", "allergy", "dermatitis"
         ],
         "ENT": [
-            "ear", "nose", "throat", "sinus", "tonsil", "sore throat"
-        ],
-        "Urology_Nephrology": [
-            "kidney", "urine", "bladder", "uti", "renal"
+            "ear pain", "earache", "sore throat", "tonsil", "sinus",
+            "nasal", "throat", "ear", "nose", "hearing loss"
         ],
         "Gynaecology": [
-            "period", "menstrual", "bleeding", "spotting", "pain", "discharge",
-            "infertility", "pregnancy", "menopause"
+            "irregular periods", "missed periods", "menstrual cramps", "menstrual",
+            "period", "pelvic pain", "vaginal", "discharge", "spotting",
+            "infertility", "pregnancy", "menopause", "pcos"
         ],
         "General_Medicine": [
-            "fever", "flu", "fatigue", "cold", "weakness"
+            "fever", "flu", "fatigue", "cold", "weakness", "malaise", "viral"
         ]
     }
 
