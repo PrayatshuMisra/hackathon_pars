@@ -16,18 +16,38 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import AdminStats from "@/components/AdminStats";
-import { 
-  LogOut, 
-  LayoutDashboard, 
+import ArchitectureModal from "@/components/ArchitectureModal";
+import {
+  LogOut,
+  LayoutDashboard,
   Stethoscope,
   Plus,
   Zap,
-  Globe
+  Globe,
+  Network
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const RANDOM_NAMES = ["J. Smith", "M. Garcia", "A. Chen", "R. Patel", "K. Williams", "S. Johnson", "D. Brown", "L. Martinez", "T. Anderson", "N. Taylor"];
+
+const RANDOM_COMPLAINTS = [
+  "Severe chest pain radiating to left arm",
+  "Shortness of breath and difficulty breathing",
+  "Sudden severe headache and dizziness",
+  "Abdominal pain and nausea",
+  "High fever and persistent cough",
+  "Palpitations and irregular heartbeat",
+  "Back pain and numbness in legs",
+  "Skin rash and allergic reaction",
+  "Urinary pain and blood in urine",
+  "Anxiety attack and panic disorder",
+  "Head trauma after fall",
+  "Vomiting blood and stomach cramps",
+  "Slurred speech and facial drooping",
+  "Knee swelling and joint pain",
+  "Ear pain and hearing loss",
+];
 
 function randomPatientInput(): PatientInput & { name: string } {
   return {
@@ -46,6 +66,7 @@ function randomPatientInput(): PatientInput & { name: string } {
     Diabetes: Math.random() > 0.8,
     Hypertension: Math.random() > 0.7,
     Heart_Disease: Math.random() > 0.85,
+    Chief_Complaint: RANDOM_COMPLAINTS[Math.floor(Math.random() * RANDOM_COMPLAINTS.length)],
   };
 }
 
@@ -54,17 +75,18 @@ export default function Dashboard() {
   const { activePatients, patients, addPatient } = usePatients();
   const { predict, loading, error, result, setResult } = useTriage();
   const { t, i18n } = useTranslation();
-  
+
   const [activeTab, setActiveTab] = useState("intake");
   const [simActive, setSimActive] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showArchitecture, setShowArchitecture] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [sortOrder, setSortOrder] = useState<"priority" | "recent" | "old">("priority"); 
-  
+  const [sortOrder, setSortOrder] = useState<"priority" | "recent" | "old">("priority");
+
   // Refs for logic
   const simActiveRef = useRef(false);
   const simRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const prevActivePatients = useRef<Patient[]>([]); 
+  const prevActivePatients = useRef<Patient[]>([]);
 
   useEffect(() => {
     simActiveRef.current = simActive;
@@ -97,7 +119,7 @@ export default function Dashboard() {
     if (isAuto && !simActiveRef.current) return;
 
     const triageResult = await predict(data);
-    
+
     if (isAuto && !simActiveRef.current) return;
 
     if (triageResult) {
@@ -134,17 +156,17 @@ export default function Dashboard() {
       }
 
       if (newPatient) {
-        if (!isAuto) setSelectedPatient(newPatient); 
+        if (!isAuto) setSelectedPatient(newPatient);
         const rawDept = triageResult.referral?.department || "General Medicine";
         try {
-           await supabase.from("patient_assignments").insert({
-             patient_id: newPatient.id,
-             patient_name: data.name,
-             department: rawDept,
-             doctor_name: "Assigned via Triage", 
-           });
+          await supabase.from("patient_assignments").insert({
+            patient_id: newPatient.id,
+            patient_name: data.name,
+            department: rawDept,
+            doctor_name: "Assigned via Triage",
+          });
         } catch (err) {
-           console.error("Analytics Error:", err);
+          console.error("Analytics Error:", err);
         }
       }
     }
@@ -156,7 +178,7 @@ export default function Dashboard() {
       handleSubmit(randomPatientInput(), true);
       simRef.current = setInterval(() => {
         if (simActiveRef.current) {
-            handleSubmit(randomPatientInput(), true);
+          handleSubmit(randomPatientInput(), true);
         }
       }, 5000);
     } else {
@@ -176,7 +198,7 @@ export default function Dashboard() {
         details: p.explanation || "",
       });
       setSelectedPatient(p);
-      setActiveTab("analysis"); 
+      setActiveTab("analysis");
     }
   };
 
@@ -205,19 +227,19 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen flex-col text-foreground font-sans selection:bg-primary/20 p-4 gap-4 overflow-hidden">
-      
+
       {/* --- HEADER --- */}
-      <motion.header 
+      <motion.header
         initial={{ y: -50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
         className="sticky top-0 z-50 mx-auto w-full shrink-0"
       >
         <div className="flex h-20 items-center justify-between rounded-3xl border border-border/40 bg-background/80 px-6 shadow-xl backdrop-blur-xl transition-all hover:border-border/60 hover:shadow-2xl">
-          
+
           {/* --- Brand Section --- */}
           <div className="flex items-center gap-4">
-            
+
             {/* UPDATED LOGO SECTION */}
             <motion.img
               initial={{ opacity: 0, scale: 0.8 }}
@@ -228,7 +250,7 @@ export default function Dashboard() {
               // Adjusted h-16 to h-12 md:h-14 to fit inside the h-20 header comfortably with padding
               className="h-12 md:h-14 w-auto drop-shadow-[0_0_15px_rgba(255,0,0,0.4)]"
             />
-            
+
             <div className="flex flex-col">
               <h1 className="text-xl font-bold tracking-tight text-foreground font-serif-display">
                 {t('app.title')}
@@ -244,7 +266,7 @@ export default function Dashboard() {
 
           {/* --- Right Actions Section --- */}
           <div className="flex items-center gap-4">
-            
+
             {/* Language Selector */}
             <div className="hidden sm:flex items-center gap-2 rounded-full bg-secondary/50 px-3 py-1.5 border border-transparent hover:border-border transition-colors">
               <Globe className="h-3.5 w-3.5 text-muted-foreground" />
@@ -288,11 +310,11 @@ export default function Dashboard() {
                 <LayoutDashboard className="h-4 w-4" />
                 {t('app.admin')}
               </Button>
-              
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={signOut} 
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={signOut}
                 className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors"
                 title="Sign Out"
               >
@@ -306,9 +328,9 @@ export default function Dashboard() {
 
       {/* Main Workspace */}
       <div className="flex flex-1 flex-col md:flex-row gap-4 overflow-hidden">
-        
+
         {/* LEFT COLUMN: Queue */}
-        <motion.aside 
+        <motion.aside
           initial={{ x: -50, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
@@ -343,8 +365,8 @@ export default function Dashboard() {
                 className="hover:bg-primary/20 hover:text-primary rounded-lg text-xs px-2 py-1 h-7"
                 title={
                   sortOrder === "priority" ? "Sorted by Risk Priority (HIGH→MEDIUM→LOW)" :
-                  sortOrder === "recent" ? "Sorted by Time (Newest First)" :
-                  "Sorted by Time (Oldest First)"
+                    sortOrder === "recent" ? "Sorted by Time (Newest First)" :
+                      "Sorted by Time (Oldest First)"
                 }
               >
                 {sortOrder === "priority" ? "Priority" : sortOrder === "recent" ? "Recent" : "Old"}
@@ -363,15 +385,16 @@ export default function Dashboard() {
           <div className="flex-1 overflow-hidden">
             <PatientQueue
               patients={sortedPatients}
+              allPatients={patients}
               selectedId={null}
               onSelect={handleSelectPatient}
-              loading={activePatients.length === 0 && loading} 
+              loading={activePatients.length === 0 && loading}
             />
           </div>
         </motion.aside>
 
         {/* RIGHT COLUMN: Workbench */}
-        <motion.main 
+        <motion.main
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.4, ease: "easeOut" }}
@@ -381,7 +404,7 @@ export default function Dashboard() {
             <div className="pb-4 shrink-0">
               <TabsList className="grid w-full max-w-[400px] grid-cols-2 glass-panel rounded-xl p-1">
                 <TabsTrigger value="intake" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">
-                 {t('dashboard.triage_intake')}
+                  {t('dashboard.triage_intake')}
                 </TabsTrigger>
                 <TabsTrigger value="analysis" disabled={!result} className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">
                   {t('dashboard.patient_analysis')}
@@ -393,19 +416,19 @@ export default function Dashboard() {
               <div className="h-full">
                 <TabsContent value="intake" className="h-full mt-0 border-0 focus-visible:ring-0 data-[state=active]:flex flex-col">
                   <div className="flex flex-col h-full rounded-2xl glass-panel shadow-xl transition-all">
-                      <div className="flex-1 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent rounded-2xl">
-                        <TriageForm onSubmit={(data) => handleSubmit(data, false)} loading={loading} />
-                      </div>
+                    <div className="flex-1 overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent rounded-2xl">
+                      <TriageForm onSubmit={(data) => handleSubmit(data, false)} loading={loading} />
+                    </div>
                   </div>
                 </TabsContent>
 
                 <TabsContent value="analysis" className="h-full mt-0 border-0 focus-visible:ring-0 data-[state=active]:flex flex-col">
                   <div className="flex flex-col h-full rounded-2xl glass-panel shadow-xl overflow-hidden transition-all">
-                      <div className="flex-1 overflow-hidden relative rounded-2xl">
-                        <div className="absolute inset-0">
-                           <RiskPanel result={result} patients={patients} apiError={error} selectedPatient={selectedPatient} loading={loading} />
-                        </div>
+                    <div className="flex-1 overflow-hidden relative rounded-2xl">
+                      <div className="absolute inset-0">
+                        <RiskPanel result={result} patients={patients} apiError={error} selectedPatient={selectedPatient} loading={loading} />
                       </div>
+                    </div>
                   </div>
                 </TabsContent>
               </div>
@@ -418,6 +441,7 @@ export default function Dashboard() {
       {showAdmin && (
         <AdminStats patients={patients} onClose={() => setShowAdmin(false)} />
       )}
+      <ArchitectureModal open={showArchitecture} onClose={() => setShowArchitecture(false)} />
     </div>
   );
 }
