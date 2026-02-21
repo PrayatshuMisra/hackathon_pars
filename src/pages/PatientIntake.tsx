@@ -970,34 +970,7 @@ export default function PatientIntake() {
                               </div>
 
                               {/* --- Pain Score Slider --- */}
-                              <div className="space-y-3 rounded-xl border border-border bg-card/40 p-4">
-                                 <div className="flex items-center justify-between">
-                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                                       Pain Level
-                                    </Label>
-                                    <span className={`text-2xl font-black font-mono ${sciPainScore >= 7 ? "text-red-400" : sciPainScore >= 4 ? "text-amber-400" : "text-emerald-400"}`}>
-                                       {sciPainScore}/10
-                                    </span>
-                                 </div>
-                                 <input
-                                    type="range"
-                                    min="0"
-                                    max="10"
-                                    value={sciPainScore}
-                                    onChange={e => setSciPainScore(Number(e.target.value))}
-                                    className="w-full accent-primary cursor-pointer"
-                                 />
-                                 <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
-                                    <span>0 No pain</span>
-                                    <span>5 Moderate</span>
-                                    <span>10 Worst</span>
-                                 </div>
-                                 {sciPainScore >= 7 && (
-                                    <p className="text-[10px] font-bold text-red-400 bg-red-500/10 rounded-lg px-3 py-1.5">
-                                       ⚠️ Severe pain — this will elevate your risk assessment
-                                    </p>
-                                 )}
-                              </div>
+                              
 
                               {/* --- Vital Signs --- */}
 
