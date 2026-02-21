@@ -61,6 +61,15 @@ export default function PatientIntake() {
    const { predict, selfCheckIn, loading, result, setResult } = useTriage();
    const [step, setStep] = useState<"form" | "result" | "self-check-in">("form");
 
+   // Self Check-In vitals state
+   const [sciPainScore, setSciPainScore] = useState(0);
+   const [sciHeartRate, setSciHeartRate] = useState(75);
+   const [sciSystolicBP, setSciSystolicBP] = useState(120);
+   const [sciO2Sat, setSciO2Sat] = useState(98);
+   const [sciDiabetes, setSciDiabetes] = useState(false);
+   const [sciHypertension, setSciHypertension] = useState(false);
+   const [sciHeartDisease, setSciHeartDisease] = useState(false);
+
    const form = useForm<PatientFormValues>({
       resolver: zodResolver(patientSchema),
       defaultValues: {
@@ -480,48 +489,68 @@ export default function PatientIntake() {
    };
 
    const onSelfCheckInSubmit = async (data: PatientFormValues) => {
-      const payload = {
+      // Build a full PatientInput using captured vitals from the enhanced self check-in form
+      const payload: PatientInput & { name: string } = {
          name: data.name,
-         age: data.age,
-         gender: data.gender,
-         symptoms: data.symptoms
+         Age: data.age || 30,
+         Gender: data.gender || "Male",
+         Chief_Complaint: data.symptoms,
+         Heart_Rate: sciHeartRate,
+         Systolic_BP: sciSystolicBP,
+         Diastolic_BP: Math.round(sciSystolicBP * 0.65), // Estimate diastolic
+         O2_Saturation: sciO2Sat,
+         Temperature: 37.0,
+         Respiratory_Rate: 16,
+         Pain_Score: sciPainScore,
+         GCS_Score: 15, // Assume alert
+         Arrival_Mode: "Walk-in",
+         Diabetes: sciDiabetes,
+         Hypertension: sciHypertension,
+         Heart_Disease: sciHeartDisease,
       };
 
-      // 1. Get Analysis
-      const result = await selfCheckIn(payload);
+      setStep("result");
+      const triageResult = await predict(payload);
 
-      if (result) {
-         setStep("result");
+      if (triageResult) {
+         // Update the state so the UI knows to hide ambulance/map/wearable
+         setResult({ ...triageResult, isSelfCheckIn: true });
 
-         // 2. Add to Queue
+         // Add to queue with real risk score/label from the ML model
          try {
             const { error } = await supabase.from("patients").insert({
                name: payload.name,
-               age: payload.age,
-               gender: payload.gender,
-               chief_complaint: payload.symptoms,
-               risk_label: "LOW",
-               risk_score: 0.1,
-               department: result.referral?.department,
-               explanation: result.details,
-               // Default Vitals (NULL for Self Check-In as per requirement)
-               heart_rate: null,
-               systolic_bp: null,
-               diastolic_bp: null,
-               o2_saturation: null,
-               temperature: null,
-               respiratory_rate: null,
-               pain_score: null,
-               gcs_score: 15, // Assumed alert
-               arrival_mode: "Walk-in",
-               diabetes: null,
-               hypertension: null,
-               heart_disease: null,
+               age: payload.Age,
+               gender: payload.Gender,
+               chief_complaint: payload.Chief_Complaint,
+               risk_label: triageResult.risk_label,
+               risk_score: triageResult.risk_score,
+               department: triageResult.referral?.department || null,
+               explanation: triageResult.details,
+               heart_rate: payload.Heart_Rate,
+               systolic_bp: payload.Systolic_BP,
+               diastolic_bp: payload.Diastolic_BP,
+               o2_saturation: payload.O2_Saturation,
+               temperature: payload.Temperature,
+               respiratory_rate: payload.Respiratory_Rate,
+               pain_score: payload.Pain_Score,
+               gcs_score: payload.GCS_Score,
+               arrival_mode: payload.Arrival_Mode,
+               diabetes: payload.Diabetes,
+               hypertension: payload.Hypertension,
+               heart_disease: payload.Heart_Disease,
                user_id: (await supabase.auth.getUser()).data.user?.id || "00000000-0000-0000-0000-000000000000"
             });
 
             if (error) console.error("Queue Error:", error);
-            else toast.success("Check-In Successful", { description: "Added to main queue." });
+            else {
+               const riskLabel = triageResult.risk_label;
+               if (riskLabel === "HIGH") {
+                  toast.error("HIGH RISK — Immediate attention needed!", { description: "A staff member has been alerted." });
+               } else {
+                  toast.success("Check-In Successful", { description: `Risk: ${riskLabel}. Added to queue.` });
+               }
+            }
          } catch (err) {
             console.error("DB Error:", err);
          }
@@ -655,10 +684,10 @@ export default function PatientIntake() {
                                        onClick={toggleListening}
                                        disabled={isProcessing}
                                        className={`flex items-center gap-2 h-8 px-3 rounded-md border transition-all text-xs font-medium shadow-sm relative ${isListening
-                                             ? "bg-red-500/10 border-red-500 text-red-500 animate-pulse"
-                                             : isProcessing
-                                                ? "bg-blue-500/10 border-blue-500 text-blue-500"
-                                                : "bg-background border-border hover:border-primary/50"
+                                          ? "bg-red-500/10 border-red-500 text-red-500 animate-pulse"
+                                          : isProcessing
+                                             ? "bg-blue-500/10 border-blue-500 text-blue-500"
+                                             : "bg-background border-border hover:border-primary/50"
                                           }`}
                                     >
                                        {isProcessing ? (
@@ -875,7 +904,7 @@ export default function PatientIntake() {
                   </motion.div>
                )}
 
-               {/* --- VIEW 1.5: SELF CHECK-IN FORM --- */}
+               {/* --- VIEW 1.5: SELF CHECK-IN FORM (Enhanced with Vitals) --- */}
                {step === "self-check-in" && (
                   <motion.div
                      key="self-check-in"
@@ -888,30 +917,37 @@ export default function PatientIntake() {
                         <div className="bg-primary/10 border-b border-primary/20 p-4 flex items-center justify-between">
                            <div className="flex items-center gap-2">
                               <User className="h-5 w-5 text-primary" />
-                              <h2 className="text-lg font-bold text-foreground">Self Check-In</h2>
+                              <div>
+                                 <h2 className="text-lg font-bold text-foreground">Self Check-In</h2>
+                                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider">AI-powered triage • Walk-in</p>
+                              </div>
                            </div>
                            <Button variant="ghost" size="icon" onClick={() => setStep("form")} className="h-8 w-8 text-muted-foreground hover:text-foreground">
                               <ChevronLeft className="h-4 w-4" />
                            </Button>
                         </div>
 
-                        <div className="p-6">
-                           <form onSubmit={handleHookFormSubmit(onSelfCheckInSubmit)} className="space-y-6">
-                              <div className="space-y-4">
+                        <div className="p-6 overflow-y-auto max-h-[75vh]">
+                           <form onSubmit={handleHookFormSubmit(onSelfCheckInSubmit)} className="space-y-5">
+
+                              {/* --- Identity --- */}
+                              <div className="space-y-3">
+                                 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                    <User className="h-3.5 w-3.5" /> Your Information
+                                 </h3>
                                  <div className="space-y-2">
-                                    <Label htmlFor="sc-name">Full Name</Label>
+                                    <Label htmlFor="sc-name" className="text-xs">Full Name</Label>
                                     <Input id="sc-name" {...register("name")} placeholder="Your Name" className="bg-background/50" />
                                     {errors.name && <span className="text-xs text-red-500">{errors.name.message}</span>}
                                  </div>
-
-                                 <div className="grid grid-cols-2 gap-4">
+                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-2">
-                                       <Label htmlFor="sc-age">Age</Label>
+                                       <Label htmlFor="sc-age" className="text-xs">Age</Label>
                                        <Input id="sc-age" type="number" {...register("age")} placeholder="Age" className="bg-background/50" />
                                        {errors.age && <span className="text-xs text-red-500">{errors.age.message}</span>}
                                     </div>
                                     <div className="space-y-2">
-                                       <Label htmlFor="sc-gender">Gender</Label>
+                                       <Label htmlFor="sc-gender" className="text-xs">Gender</Label>
                                        <Select value={formValues.gender} onValueChange={v => setValue("gender", v as any)}>
                                           <SelectTrigger className="bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger>
                                           <SelectContent>
@@ -922,16 +958,85 @@ export default function PatientIntake() {
                                        </Select>
                                     </div>
                                  </div>
+                              </div>
 
+                              {/* --- Symptoms --- */}
+                              <div className="space-y-2">
+                                 <Label htmlFor="sc-symptoms" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                    <Stethoscope className="h-3.5 w-3.5" /> Chief Complaint
+                                 </Label>
+                                 <Textarea id="sc-symptoms" {...register("symptoms")} placeholder="Briefly describe your symptoms..." className="bg-background/50 min-h-[80px]" />
+                                 {errors.symptoms && <span className="text-xs text-red-500">{errors.symptoms.message}</span>}
+                              </div>
+
+                              {/* --- Pain Score Slider --- */}
+                              <div className="space-y-3 rounded-xl border border-border bg-card/40 p-4">
+                                 <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                       Pain Level
+                                    </Label>
+                                    <span className={`text-2xl font-black font-mono ${sciPainScore >= 7 ? "text-red-400" : sciPainScore >= 4 ? "text-amber-400" : "text-emerald-400"}`}>
+                                       {sciPainScore}/10
+                                    </span>
+                                 </div>
+                                 <input
+                                    type="range"
+                                    min="0"
+                                    max="10"
+                                    value={sciPainScore}
+                                    onChange={e => setSciPainScore(Number(e.target.value))}
+                                    className="w-full accent-primary cursor-pointer"
+                                 />
+                                 <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+                                    <span>0 No pain</span>
+                                    <span>5 Moderate</span>
+                                    <span>10 Worst</span>
+                                 </div>
+                                 {sciPainScore >= 7 && (
+                                    <p className="text-[10px] font-bold text-red-400 bg-red-500/10 rounded-lg px-3 py-1.5">
+                                       ⚠️ Severe pain — this will elevate your risk assessment
+                                    </p>
+                                 )}
+                              </div>
+
+                              {/* --- Vital Signs --- */}
+
+
+                              {/* --- Medical History --- */}
+                              <div className="space-y-3 rounded-xl border border-border bg-card/40 p-4">
+                                 <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                    <FileText className="h-3.5 w-3.5 text-violet-400" /> Medical History
+                                 </Label>
                                  <div className="space-y-2">
-                                    <Label htmlFor="sc-symptoms">Symptoms</Label>
-                                    <Textarea id="sc-symptoms" {...register("symptoms")} placeholder="Briefly describe your symptoms..." className="bg-background/50 min-h-[100px]" />
-                                    {errors.symptoms && <span className="text-xs text-red-500">{errors.symptoms.message}</span>}
+                                    {[
+                                       { label: "Diabetes", value: sciDiabetes, setter: setSciDiabetes },
+                                       { label: "Hypertension", value: sciHypertension, setter: setSciHypertension },
+                                       { label: "Heart Disease", value: sciHeartDisease, setter: setSciHeartDisease },
+                                    ].map(({ label, value, setter }) => (
+                                       <button
+                                          key={label}
+                                          type="button"
+                                          onClick={() => setter(!value)}
+                                          className={`w-full flex items-center justify-between rounded-lg px-3 py-2 border text-sm font-medium transition-all ${value
+                                             ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                                             : "bg-background/50 border-border text-muted-foreground hover:border-primary/30"
+                                             }`}
+                                       >
+                                          <span>{label}</span>
+                                          <span className={`text-xs font-bold uppercase ${value ? "text-amber-400" : "text-zinc-600"}`}>
+                                             {value ? "✓ Yes" : "No"}
+                                          </span>
+                                       </button>
+                                    ))}
                                  </div>
                               </div>
 
-                              <Button type="submit" disabled={loading} className="w-full font-bold">
-                                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Check In Now"}
+                              <Button type="submit" disabled={loading} className="w-full font-bold h-12 rounded-xl shadow-lg shadow-primary/20">
+                                 {loading ? (
+                                    <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Analysing...</span>
+                                 ) : (
+                                    <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5" /> Check In &amp; Get AI Assessment</span>
+                                 )}
                               </Button>
                            </form>
                         </div>
@@ -1011,8 +1116,8 @@ export default function PatientIntake() {
                                              <div
                                                 key={i}
                                                 className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${isRecommended
-                                                      ? "bg-primary/10 border-primary/30 shadow-sm relative overflow-hidden"
-                                                      : "bg-background/50 border-border"
+                                                   ? "bg-primary/10 border-primary/30 shadow-sm relative overflow-hidden"
+                                                   : "bg-background/50 border-border"
                                                    }`}
                                              >
                                                 {isRecommended && (

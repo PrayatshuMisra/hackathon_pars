@@ -111,7 +111,10 @@ MEDICAL_KEYWORDS = {
     "Orthopedics": {
         "fracture": 0.9, "broken bone": 0.95, "sprain": 0.8, "dislocation": 0.85,
         "joint pain": 0.75, "back pain": 0.75, "muscle pain": 0.7,
-        "arthritis": 0.8, "limb injury": 0.85
+        "arthritis": 0.8, "limb injury": 0.85,
+        # bone-related phrases — catches "bone problem", "bone issue", "bone ache", etc.
+        "bone pain": 0.9, "bone problem": 0.95, "bone issue": 0.9,
+        "bone ache": 0.9, "bony": 0.8, "bone": 0.85
     },
     "Psychiatry": {
         "suicidal": 0.95, "suicide": 0.95, "depression": 0.85, "anxiety": 0.8,
@@ -305,8 +308,8 @@ def get_department(complaint: str) -> str:
             nlp_score = nlp_scores.get(dept_name, 0.0)
             keyword_score = keyword_scores.get(dept_name, 0.0)
             
-            # If keyword score is very high (>= 0.9), prioritize it
-            if keyword_score >= 0.9:
+            # If keyword score is high (>= 0.8), prioritize it strongly (keyword wins over NLP)
+            if keyword_score >= 0.8:
                 hybrid_scores[dept_name] = (nlp_score * 0.3) + (keyword_score * 0.7)
             # If keyword score is moderate, balance both
             elif keyword_score >= 0.5:
@@ -395,7 +398,7 @@ def get_department_legacy(complaint: str) -> str:
         ],
         "Orthopedics": [
             "fracture", "broken bone", "joint pain", "sprain", "dislocation",
-            "back pain", "muscle pain", "arthritis", "limb"
+            "back pain", "muscle pain", "arthritis", "limb", "bone"
         ],
         "Dermatology": [
             "rash", "itching", "itch", "skin", "hives", "eczema",

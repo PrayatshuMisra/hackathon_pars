@@ -20,6 +20,7 @@ tests = [
     "I feel dizzy and have a migraine",
     "My blood pressure is very high",
     "I have kidney stones",
+    "I have bone pain and arthritis"
 ]
 
 print("\n=== Department Keyword Matching Test ===\n")
