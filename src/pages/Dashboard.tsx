@@ -9,7 +9,7 @@ import { motion } from "framer-motion"; // <--- IMPORT ADDED
 import PatientQueue from "@/components/PatientQueue";
 import TriageForm from "@/components/TriageForm";
 import RiskPanel from "@/components/RiskPanel";
-import Footer from "@/components/Footer";
+// import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -437,7 +437,7 @@ export default function Dashboard() {
         </motion.main>
       </div>
 
-      <Footer />
+      {/* <Footer /> */}
       {showAdmin && (
         <AdminStats patients={patients} onClose={() => setShowAdmin(false)} />
       )}
