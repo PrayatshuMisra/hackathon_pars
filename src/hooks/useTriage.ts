@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const API_URL = import.meta.env.VITE_FASTAPI_URL || "http://localhost:8000";
+const API_URL = (import.meta.env.VITE_FASTAPI_URL || "http://localhost:8000").replace(/\/$/, "");
 
 export interface PatientInput {
   Age: number;

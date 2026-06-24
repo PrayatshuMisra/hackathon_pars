@@ -637,7 +637,8 @@ export default function PatientIntake() {
                                        formData.append("file", file);
                                        const toastId = toast.loading("Uploading & Parsing Document...");
                                        try {
-                                          const res = await fetch(`${import.meta.env.VITE_FASTAPI_URL}/parse-document`, { method: "POST", body: formData });
+                                          const cleanApiUrl = (import.meta.env.VITE_FASTAPI_URL || "http://localhost:8000").replace(/\/$/, "");
+                                          const res = await fetch(`${cleanApiUrl}/parse-document`, { method: "POST", body: formData });
                                           const data = await res.json();
                                           if (data.data) {
                                              const extracted = data.data;
