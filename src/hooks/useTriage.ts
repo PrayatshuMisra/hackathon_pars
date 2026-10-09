@@ -31,13 +31,19 @@ export interface ReferralData {
   doctors: Doctor[];
 }
 
+export interface ExplainabilityFeature {
+  feature: string;
+  contribution: string;
+  value: string | number;
+}
+
 export interface TriageResult {
   risk_score: number;
   risk_label: string;
   details: string;
   referral?: ReferralData;
   isSelfCheckIn?: boolean;
-  explainability?: any[];
+  explainability?: ExplainabilityFeature[];
 }
 
 export function useTriage() {

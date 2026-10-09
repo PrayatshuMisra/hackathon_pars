@@ -16,8 +16,10 @@ export default function WearableAlerts() {
   const SILENCE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 
   useEffect(() => {
-    // Connect to the backend WebSocket
-    const ws = new WebSocket("ws://localhost:8000/ws/dashboard");
+    // Connect to the backend WebSocket using dynamic URL
+    const API_URL = import.meta.env.VITE_FASTAPI_URL || "http://localhost:8000";
+    const WS_URL = API_URL.replace("http://", "ws://").replace("https://", "wss://");
+    const ws = new WebSocket(`${WS_URL}/ws/dashboard`);
     
     ws.onmessage = (event) => {
       try {

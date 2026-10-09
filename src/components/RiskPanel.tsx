@@ -168,7 +168,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
       columnStyles: { 0: { cellWidth: 100, fontStyle: 'bold' }, 1: { fontStyle: 'bold' } },
     });
 
-    currentY = (doc as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+    currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
 
     // --- 3. SUBJECTIVE: CHIEF COMPLAINT ---
     doc.setFontSize(12);
@@ -219,7 +219,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
       }
     });
 
-    currentY = (doc as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 15;
+    currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 15;
 
     // --- 5. PARS ASSESSMENT (The "Conclusion") ---
     doc.setFontSize(12);
@@ -250,7 +250,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
 
     // Calculate best doctor
     const doctors = result?.referral?.doctors || [];
-    const bestDoc = doctors.length > 0 ? doctors.reduce((prev: Record<string, unknown>, current: Record<string, unknown>) => ((prev.experience as number) > (current.experience as number)) ? prev : current, doctors[0] as Record<string, unknown>) : null;
+    const bestDoc = doctors.length > 0 ? doctors.reduce((prev, current) => (prev.experience > current.experience) ? prev : current) : null;
 
     const docBoxHeight = bestDoc ? 40 : 25;
     doc.roundedRect(64, currentY + 8, 132, docBoxHeight, 3, 3); // Border only
@@ -299,7 +299,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
     doc.save(`PARS_Report_${activePatient.name.replace(/\s+/g, '_')}.pdf`);
   };
 
-  const [randomProtocol, setRandomProtocol] = useState<Record<string, unknown> | null>(null);
+  const [randomProtocol, setRandomProtocol] = useState<{ text: string, icon: any, urgent: boolean } | null>(null);
   const [showFullList, setShowFullList] = useState(false);
 
   // Define defaults safely for loading state
@@ -506,8 +506,8 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
                   <p>
                     <span className="font-bold text-red-400">AI flagged HIGH RISK primarily due to: </span>
                     {result.explainability
-                      .filter((f: { feature: string; contribution: string; value: string | number }) => f.contribution === "High" || f.contribution === "Low" || f.contribution === "Critical")
-                      .map((f: { feature: string; contribution: string; value: string | number }) => `${f.feature.replace(/_/g, " ")} (${f.contribution}: ${f.value})`)
+                      .filter(f => f.contribution === "High" || f.contribution === "Low" || f.contribution === "Critical")
+                      .map(f => `${f.feature.replace(/_/g, " ")} (${f.contribution}: ${f.value})`)
                       .join(", ")}
                   </p>
                 </div>
@@ -518,7 +518,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
                 animate={{ height: "auto", opacity: 1 }}
                 className="space-y-2 overflow-hidden"
               >
-                {result.explainability.map((f: { feature: string; contribution: string; value: string | number }, i: number) => {
+                {result.explainability.map((f, i: number) => {
                   let barColor = "bg-zinc-500";
                   let textColor = "text-zinc-400";
                   if (f.contribution === "High" || f.contribution === "Critical") { barColor = "bg-red-500"; textColor = "text-red-400"; }
@@ -576,7 +576,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em]">{t('risk.recommended_dept')}</p>
                     <h2 className="text-2xl font-black text-white uppercase tracking-tight font-serif-display">
-                      {t(`departments.${result.referral.department}`, result.referral.department.replace(/_/g, " "))}
+                      {t(`departments.${result.referral?.department || 'General_Medicine'}`, (result.referral?.department || 'General_Medicine').replace(/_/g, " "))}
                     </h2>
                   </div>
                 </div>
@@ -677,7 +677,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
                 </div>
               </div>
               <DialogDescription className="text-zinc-400 font-mono text-xs">
-                {t('risk.on_call')} <span className="text-white font-bold">{t(`departments.${result?.referral?.department}`, result?.referral?.department?.replace(/_/g, " "))}</span>
+                {t('risk.on_call')} <span className="text-white font-bold">{t(`departments.${result?.referral?.department || 'General_Medicine'}`, (result?.referral?.department || 'General_Medicine').replace(/_/g, " "))}</span>
               </DialogDescription>
             </DialogHeader>
           </div>
