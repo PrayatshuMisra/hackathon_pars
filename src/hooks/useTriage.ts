@@ -37,6 +37,7 @@ export interface TriageResult {
   details: string;
   referral?: ReferralData;
   isSelfCheckIn?: boolean;
+  explainability?: any[];
 }
 
 export function useTriage() {

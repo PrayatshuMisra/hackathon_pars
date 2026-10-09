@@ -1,0 +1,43 @@
+{
+  "protocol": "Modified Early Warning Score (MEWS) & ESI Level Guidelines",
+  "base_score": 0.05,
+  "rules": [
+    {
+      "metric": "Heart_Rate",
+      "conditions": [
+        { "operator": ">=", "value": 180, "penalty": 0.60, "detail": "Abnormal heart rate (Tachycardia)" },
+        { "operator": "<=", "value": 40, "penalty": 0.60, "detail": "Abnormal heart rate (Bradycardia)" },
+        { "operator": ">", "value": 100, "penalty": 0.30, "detail": "Elevated heart rate" },
+        { "operator": "<", "value": 60, "penalty": 0.20, "detail": "Low heart rate" }
+      ]
+    },
+    {
+      "metric": "Systolic_BP",
+      "conditions": [
+        { "operator": "<", "value": 70, "penalty": 0.60, "detail": "Severe hypotension" },
+        { "operator": "<", "value": 90, "penalty": 0.30, "detail": "Low blood pressure" },
+        { "operator": ">", "value": 160, "penalty": 0.30, "detail": "High blood pressure" }
+      ]
+    },
+    {
+      "metric": "O2_Saturation",
+      "conditions": [
+        { "operator": "<", "value": 85, "penalty": 0.60, "detail": "Critical hypoxia" },
+        { "operator": "<", "value": 94, "penalty": 0.30, "detail": "Low oxygen saturation" }
+      ]
+    },
+    {
+      "metric": "GCS_Score",
+      "conditions": [
+        { "operator": "<=", "value": 8, "penalty": 0.80, "detail": "Reduced consciousness (Coma)" },
+        { "operator": "<", "value": 15, "penalty": 0.40, "detail": "Altered mental status" }
+      ]
+    },
+    {
+      "metric": "Age",
+      "conditions": [
+        { "operator": ">", "value": 65, "penalty": 0.15, "detail": "Geriatric risk factor" }
+      ]
+    }
+  ]
+}

@@ -14,6 +14,7 @@ from doc_parser import extract_vitals_from_pdf
 from dept_service import get_referral, get_department
 import os
 import shutil
+import json
 
 app = FastAPI(title="PARS Triage API", version="1.0.0")
 
@@ -111,56 +112,38 @@ def predict(patient: PatientInput):
     # Fallback mode: Use rule-based risk assessment if ML model isn't loaded
     if model is None:
         print("[PARS] WARNING: Using fallback mode (ML model not available)")
-        # Simple rule-based risk assessment
-        hr = patient.Heart_Rate
-        systolic = patient.Systolic_BP
-        o2 = patient.O2_Saturation
-        gcs = patient.GCS_Score
-        
-        # Determine risk based on continuous scoring
-        base_score = 0.05
+        # Load Clinical Rules Engine
+        try:
+            with open("clinical_rules.json", "r") as f:
+                rules_engine = json.load(f)
+        except Exception as e:
+            print(f"[PARS] Error loading rules: {e}")
+            rules_engine = {"base_score": 0.05, "rules": []}
+            
+        base_score = rules_engine.get("base_score", 0.05)
         penalties = 0.0
         details_list = []
         
-        # Heart Rate logic
-        if hr > 180 or hr < 40:
-            penalties += 0.60
-            details_list.append("Abnormal heart rate")
-        elif hr > 100:
-            penalties += min(0.30, (hr - 100) * 0.005)
-            details_list.append("Elevated heart rate")
-        elif hr < 60:
-            penalties += min(0.20, (60 - hr) * 0.01)
-            
-        # Blood pressure logic
-        if systolic < 70:
-            penalties += 0.60
-            details_list.append("Severe hypotension")
-        elif systolic < 90:
-            penalties += min(0.30, (90 - systolic) * 0.015)
-            details_list.append("Low blood pressure")
-        elif systolic > 160:
-            penalties += min(0.30, (systolic - 160) * 0.005)
-            details_list.append("High blood pressure")
-            
-        # Oxygen logic
-        if o2 < 85:
-            penalties += 0.60
-            details_list.append("Critical hypoxia")
-        elif o2 < 94:
-            penalties += min(0.30, (94 - o2) * 0.05)
-            details_list.append("Low oxygen saturation")
-            
-        # GCS logic
-        if gcs <= 8:
-            penalties += 0.80
-            details_list.append("Reduced consciousness")
-        elif gcs < 15:
-            penalties += min(0.40, (15 - gcs) * 0.05)
-            
-        # Age penalty
-        if patient.Age and patient.Age > 65:
-            penalties += min(0.15, (patient.Age - 65) * 0.005)
+        # Evaluate rules dynamically
+        for rule in rules_engine.get("rules", []):
+            metric_val = getattr(patient, rule["metric"], None)
+            if metric_val is None:
+                continue
+                
+            for cond in rule["conditions"]:
+                matched = False
+                op = cond["operator"]
+                val = cond["value"]
+                if op == ">" and metric_val > val: matched = True
+                elif op == ">=" and metric_val >= val: matched = True
+                elif op == "<" and metric_val < val: matched = True
+                elif op == "<=" and metric_val <= val: matched = True
+                elif op == "==" and metric_val == val: matched = True
+                
+                if matched:
+                    penalties += cond["penalty"]
+                    details_list.append(cond["detail"])
+                    break # Apply highest severity condition only (assuming they are ordered correctly, or just first match)
 
         # Calculate final continuous score
         risk_score = min(0.99, base_score + penalties)
@@ -174,9 +157,9 @@ def predict(patient: PatientInput):
             risk_label = "LOW"
             
         if not details_list:
-            details = "Vitals within acceptable range"
+            details = f"Vitals within acceptable range (Evaluated via {rules_engine.get('protocol', 'Standard Protocol')})"
         else:
-            prefix = "⚠️ Critical vitals detected: " if risk_label == "HIGH" else "Elevated vitals requiring attention: "
+            prefix = f"⚠️ Critical vitals detected (Evaluated via {rules_engine.get('protocol', 'Standard Protocol')}): " if risk_label == "HIGH" else "Elevated vitals requiring attention: "
             details = prefix + ", ".join(details_list)
         
         result = {

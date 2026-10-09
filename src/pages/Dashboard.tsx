@@ -7,6 +7,7 @@ import { useTriage, PatientInput } from "@/hooks/useTriage";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion"; // <--- IMPORT ADDED
 import PatientQueue from "@/components/PatientQueue";
+import WearableAlerts from "@/components/WearableAlerts";
 import TriageForm from "@/components/TriageForm";
 import RiskPanel from "@/components/RiskPanel";
 // import Footer from "@/components/Footer";
@@ -208,6 +209,11 @@ export default function Dashboard() {
 
   const sortedPatients = [...activePatients].sort((a, b) => {
     if (sortOrder === "priority") {
+      const scoreA = Number(a.risk_score) || 0;
+      const scoreB = Number(b.risk_score) || 0;
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA;
+      }
       const riskOrder = { "HIGH": 0, "MEDIUM": 1, "LOW": 2 };
       const riskA = riskOrder[a.risk_label as keyof typeof riskOrder] ?? 3;
       const riskB = riskOrder[b.risk_label as keyof typeof riskOrder] ?? 3;
@@ -227,7 +233,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen flex-col text-foreground font-sans selection:bg-primary/20 p-4 gap-4 overflow-hidden">
-
+      <WearableAlerts />
       {/* --- HEADER --- */}
       <motion.header
         initial={{ y: -50, opacity: 0 }}

@@ -97,9 +97,6 @@ const PROTOCOLS = {
 
 export default function RiskPanel({ result, patients, apiError, selectedPatient, loading }: Props) {
   const { t, i18n } = useTranslation();
-  const [isExporting, setIsExporting] = useState(false);
-  const [showPdfPreview, setShowPdfPreview] = useState(false);
-  const [showFeatures, setShowFeatures] = useState(false);
 
   // Default to first patient if specific selection missing (e.g. live view)
   const activePatient = selectedPatient || patients[0];
@@ -171,7 +168,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
       columnStyles: { 0: { cellWidth: 100, fontStyle: 'bold' }, 1: { fontStyle: 'bold' } },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 10;
+    currentY = (doc as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
 
     // --- 3. SUBJECTIVE: CHIEF COMPLAINT ---
     doc.setFontSize(12);
@@ -222,7 +219,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
       }
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 15;
+    currentY = (doc as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 15;
 
     // --- 5. PARS ASSESSMENT (The "Conclusion") ---
     doc.setFontSize(12);
@@ -253,7 +250,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
 
     // Calculate best doctor
     const doctors = result?.referral?.doctors || [];
-    const bestDoc = doctors.length > 0 ? doctors.reduce((prev: any, current: any) => (prev.experience > current.experience) ? prev : current, doctors[0]) : null;
+    const bestDoc = doctors.length > 0 ? doctors.reduce((prev: Record<string, unknown>, current: Record<string, unknown>) => ((prev.experience as number) > (current.experience as number)) ? prev : current, doctors[0] as Record<string, unknown>) : null;
 
     const docBoxHeight = bestDoc ? 40 : 25;
     doc.roundedRect(64, currentY + 8, 132, docBoxHeight, 3, 3); // Border only
@@ -302,7 +299,7 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
     doc.save(`PARS_Report_${activePatient.name.replace(/\s+/g, '_')}.pdf`);
   };
 
-  const [randomProtocol, setRandomProtocol] = useState<any>(null);
+  const [randomProtocol, setRandomProtocol] = useState<Record<string, unknown> | null>(null);
   const [showFullList, setShowFullList] = useState(false);
 
   // Define defaults safely for loading state
@@ -493,123 +490,66 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
             </div>
           )}
 
-          {/* FEATURE CONTRIBUTION VISUALIZATION */}
-          {result && activePatient && (() => {
-            // Compute each vital's deviation from normal range → contribution %
-            const computeContribution = (value: number | null | undefined, low: number, high: number, critLow?: number, critHigh?: number): number => {
-              if (value == null) return 0;
-              const range = high - low;
-              if (range <= 0) return 0;
-              if (critLow !== undefined && value <= critLow) return 100;
-              if (critHigh !== undefined && value >= critHigh) return 100;
-              if (value < low) return Math.min(100, Math.round(((low - value) / range) * 100));
-              if (value > high) return Math.min(100, Math.round(((value - high) / range) * 100));
-              return 0;
-            };
-
-            const features = [
-              {
-                label: "Heart Rate",
-                unit: "bpm",
-                value: activePatient.heart_rate,
-                score: computeContribution(activePatient.heart_rate, 60, 100, 40, 180),
-                normal: "60–100",
-              },
-              {
-                label: "SpO₂",
-                unit: "%",
-                value: activePatient.o2_saturation,
-                score: computeContribution(activePatient.o2_saturation ? (100 - activePatient.o2_saturation) : null, 0, 6, undefined, 15),
-                normal: "94–100",
-              },
-              {
-                label: "Systolic BP",
-                unit: "mmHg",
-                value: activePatient.systolic_bp,
-                score: computeContribution(activePatient.systolic_bp, 90, 140, 70, 200),
-                normal: "90–140",
-              },
-              {
-                label: "Temperature",
-                unit: "°C",
-                value: activePatient.temperature,
-                score: computeContribution(activePatient.temperature, 36.5, 37.5, 35, 40),
-                normal: "36.5–37.5",
-              },
-              {
-                label: "GCS Score",
-                unit: "/15",
-                value: activePatient.gcs_score,
-                score: computeContribution(activePatient.gcs_score != null ? (15 - activePatient.gcs_score) : null, 0, 7, undefined, 12),
-                normal: "15",
-              },
-              {
-                label: "Pain Score",
-                unit: "/10",
-                value: activePatient.pain_score,
-                score: computeContribution(activePatient.pain_score, 0, 4, undefined, 8),
-                normal: "0–3",
-              },
-            ];
-
-            // Sort by contribution descending
-            const sorted = [...features].sort((a, b) => b.score - a.score);
-
-            return (
-              <div className="space-y-3 pt-2 border-t border-zinc-800">
-                <div className="flex items-center justify-between">
-                  <h3 className="flex items-center gap-2 text-xs font-bold text-zinc-100 uppercase tracking-wide">
-                    <Activity className={`h-3.5 w-3.5 ${currentTheme.text}`} />
-                    Feature Contribution
-                  </h3>
-                  <button
-                    onClick={() => setShowFeatures(!showFeatures)}
-                    className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white transition-colors flex items-center gap-1 bg-zinc-800/50 hover:bg-zinc-700/50 px-2 py-1 rounded"
-                  >
-                    {showFeatures ? "Hide" : "Show"} <ChevronRight className={`h-3 w-3 transition-transform ${showFeatures ? "rotate-90" : ""}`} />
-                  </button>
-                </div>
-
-                {showFeatures && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="space-y-2 overflow-hidden"
-                  >
-                    {sorted.map((f, i) => {
-                      const barColor = f.score >= 60 ? "bg-red-500" : f.score >= 30 ? "bg-amber-500" : "bg-emerald-500";
-                      const textColor = f.score >= 60 ? "text-red-400" : f.score >= 30 ? "text-amber-400" : "text-emerald-400";
-                      return (
-                        <motion.div
-                          key={f.label}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.07 }}
-                          className="flex items-center gap-2"
-                        >
-                          <span className="w-[72px] shrink-0 text-[10px] font-mono text-zinc-400 text-right">{f.label}</span>
-                          <div className="flex-1 h-[6px] rounded-full bg-zinc-800 overflow-hidden">
-                            <motion.div
-                              className={`h-full rounded-full ${barColor}`}
-                              initial={{ width: 0 }}
-                              animate={{ width: `${Math.max(f.score, 2)}%` }}
-                              transition={{ duration: 0.6, delay: i * 0.07, ease: "easeOut" }}
-                            />
-                          </div>
-                          <span className={`w-8 shrink-0 text-[10px] font-bold font-mono ${textColor}`}>{f.score}%</span>
-                          <span className="text-[9px] text-zinc-600 font-mono hidden lg:block">{f.value != null ? `${f.value}${f.unit}` : "--"}</span>
-                        </motion.div>
-                      );
-                    })}
-                    <p className="text-[9px] text-zinc-600 font-mono text-center pt-2">
-                      Contribution = deviation from normal range (Normal: HR 60–100, SpO₂ 94–100, BP 90–140)
-                    </p>
-                  </motion.div>
-                )}
+          {/* EXPLAINABILITY (XAI) UI INTEGRATION */}
+          {result && result.explainability && result.explainability.length > 0 && (
+            <div className="space-y-3 pt-2 border-t border-zinc-800">
+              <div className="flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-xs font-bold text-zinc-100 uppercase tracking-wide">
+                  <Activity className={`h-3.5 w-3.5 ${currentTheme.text}`} />
+                  AI Reasoning (Explainability)
+                </h3>
               </div>
-            );
-          })()}
+
+              {/* Plain English XAI Breakdown */}
+              {result.risk_label === "HIGH" && (
+                <div className="rounded border border-red-900/50 bg-red-950/20 p-3 text-sm text-red-200 font-mono">
+                  <p>
+                    <span className="font-bold text-red-400">AI flagged HIGH RISK primarily due to: </span>
+                    {result.explainability
+                      .filter((f: { feature: string; contribution: string; value: string | number }) => f.contribution === "High" || f.contribution === "Low" || f.contribution === "Critical")
+                      .map((f: { feature: string; contribution: string; value: string | number }) => `${f.feature.replace(/_/g, " ")} (${f.contribution}: ${f.value})`)
+                      .join(", ")}
+                  </p>
+                </div>
+              )}
+
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                className="space-y-2 overflow-hidden"
+              >
+                {result.explainability.map((f: { feature: string; contribution: string; value: string | number }, i: number) => {
+                  let barColor = "bg-zinc-500";
+                  let textColor = "text-zinc-400";
+                  if (f.contribution === "High" || f.contribution === "Critical") { barColor = "bg-red-500"; textColor = "text-red-400"; }
+                  else if (f.contribution === "Low") { barColor = "bg-amber-500"; textColor = "text-amber-400"; }
+                  else if (f.contribution === "Normal") { barColor = "bg-emerald-500"; textColor = "text-emerald-400"; }
+
+                  return (
+                    <motion.div
+                      key={f.feature}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.07 }}
+                      className="flex items-center gap-2"
+                    >
+                      <span className="w-[100px] shrink-0 text-[10px] font-mono text-zinc-400 text-right">{f.feature.replace(/_/g, " ")}</span>
+                      <div className="flex-1 h-[6px] rounded-full bg-zinc-800 overflow-hidden">
+                        <motion.div
+                          className={`h-full rounded-full ${barColor}`}
+                          initial={{ width: 0 }}
+                          animate={{ width: f.contribution === "Normal" ? "10%" : "80%" }}
+                          transition={{ duration: 0.6, delay: i * 0.07, ease: "easeOut" }}
+                        />
+                      </div>
+                      <span className={`w-16 shrink-0 text-[10px] font-bold font-mono ${textColor}`}>{f.contribution}</span>
+                      <span className="text-[9px] text-zinc-600 font-mono hidden lg:block">{f.value !== "N/A" ? f.value : ""}</span>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+            </div>
+          )}
 
           {/* 3. SPECIALIST REFERRAL WITH BIG HEADER */}
           {result?.referral && (
