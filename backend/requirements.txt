@@ -11,3 +11,6 @@ pypdf
 supabase
 python-multipart
 h5py
+easyocr
+pypdfium2
+Pillow
