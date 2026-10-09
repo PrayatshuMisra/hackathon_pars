@@ -30,7 +30,7 @@ try:
     
     if response.status_code == 200:
         data = response.json()
-        print("\n✓ SUCCESS! API is working!")
+        print("\n[OK] SUCCESS! API is working!")
         print(f"\nRisk Assessment:")
         print(f"  - Risk Score: {data.get('risk_score')}")
         print(f"  - Risk Label: {data.get('risk_label')}")
@@ -42,10 +42,10 @@ try:
             print(f"  - Doctors Found: {len(data['referral'].get('doctors', []))}")
             
             if data['referral'].get('department') == "Toxicology":
-                print("\n✓✓✓ PERFECT! 'snake bite' correctly routed to Toxicology!")
+                print("\n[OK][OK][OK] PERFECT! 'snake bite' correctly routed to Toxicology!")
             else:
-                print(f"\n✗ ERROR: 'snake bite' routed to {data['referral'].get('department')} instead of Toxicology")
+                print(f"\n[ERROR] 'snake bite' routed to {data['referral'].get('department')} instead of Toxicology")
     else:
-        print(f"\n✗ ERROR: {response.text}")
+        print(f"\n[ERROR]: {response.text}")
 except Exception as e:
-    print(f"\n✗ Connection Error: {e}")
+    print(f"\n[ERROR] Connection Error: {e}")

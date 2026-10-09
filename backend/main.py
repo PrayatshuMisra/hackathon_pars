@@ -3,7 +3,7 @@ PARS - FastAPI Backend
 Run with: uvicorn main:app --reload --port 8000
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -20,15 +20,8 @@ app = FastAPI(title="PARS Triage API", version="1.0.0")
 # CORS - allow your Lovable frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=".*",
-    # allow_origins=[
-    #     "http://localhost:5173",
-    #     "http://localhost:3000",
-    #     "http://127.0.0.1:5173",
-    #     "http://127.0.0.1:3000",
-    #     "https://*.lovable.app",
-    # ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -105,6 +98,7 @@ class TriageResponse(BaseModel):
     risk_label: str
     details: str
     referral: Optional[Dict[str, Any]] = None
+    explainability: Optional[List[Dict[str, Any]]] = None
 
 
 @app.get("/")
@@ -188,7 +182,8 @@ def predict(patient: PatientInput):
         result = {
             "risk_score": risk_score,
             "risk_label": risk_label,
-            "details": details
+            "details": details,
+            "explainability": [{"feature": "Rule_Based", "contribution": "Fallback", "value": "No ML"}]
         }
     else:
         # Use ML model if available
@@ -229,7 +224,8 @@ def self_check_in(data: SelfCheckInInput):
         "risk_score": 0.1,
         "risk_label": "LOW",
         "details": f"Self check-in completed. Based on '{data.symptoms}', we recommend visiting {dept.replace('_', ' ')}.",
-        "referral": referral_data
+        "referral": referral_data,
+        "explainability": [{"feature": "Self_Check_In", "contribution": "Default", "value": "LOW"}]
     }
 
 @app.post("/parse-document")
@@ -272,6 +268,78 @@ async def transcribe_audio(file: UploadFile = File(...)):
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
 
+# --- MOCK FHIR INTEGRATION ---
+class FHIRPatient(BaseModel):
+    resourceType: str = "Patient"
+    name: List[Dict[str, Any]]
+    gender: str
+    birthDate: Optional[str] = None
+
+class FHIREncounter(BaseModel):
+    resourceType: str = "Encounter"
+    status: str
+    subject: Dict[str, str]
+    period: Dict[str, str]
+
+@app.post("/fhir/Patient")
+def create_fhir_patient(patient: FHIRPatient):
+    """
+    Mock FHIR Endpoint to demonstrate EMR integration (Epic/Cerner).
+    """
+    return {
+        "id": "mock-fhir-id-12345",
+        "resourceType": "Patient",
+        "status": "success",
+        "message": "Patient successfully synced to mock EMR via FHIR HL7."
+    }
+
+@app.post("/fhir/Encounter")
+def create_fhir_encounter(encounter: FHIREncounter):
+    """
+    Mock FHIR Endpoint for triage encounters.
+    """
+    return {
+        "id": "mock-encounter-id-67890",
+        "resourceType": "Encounter",
+        "status": "success",
+        "message": "Triage encounter recorded in mock EMR."
+    }
+
+# --- WEBSOCKETS FOR WEARABLE INTEGRATION ---
+active_dashboards = []
+
+@app.websocket("/ws/dashboard")
+async def dashboard_websocket(websocket: WebSocket):
+    """Frontend React dashboard connects here to listen for live vitals."""
+    await websocket.accept()
+    active_dashboards.append(websocket)
+    try:
+        while True:
+            # Keep connection open, waiting for dashboard to disconnect
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        active_dashboards.remove(websocket)
+
+@app.websocket("/ws/vitals/{patient_id}")
+async def wearable_stream(websocket: WebSocket, patient_id: str):
+    """The simulated wearable connects here and pushes vitals."""
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_json()
+            
+            # Broadcast to all connected dashboards
+            for dashboard in active_dashboards:
+                try:
+                    await dashboard.send_json({
+                        "patient_id": patient_id, 
+                        "vitals": data
+                    })
+                except Exception:
+                    # Ignore if dashboard drops connection midway
+                    pass
+    except WebSocketDisconnect:
+        print(f"[PARS] Wearable disconnected for patient {patient_id}")
 
 if __name__ == "__main__":
     import uvicorn

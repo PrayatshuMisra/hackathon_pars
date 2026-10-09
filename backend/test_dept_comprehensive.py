@@ -56,7 +56,7 @@ results = []
 
 for complaint, expected_dept in test_cases:
     actual_dept = get_department(complaint)
-    status = "✓ PASS" if actual_dept == expected_dept else "✗ FAIL"
+    status = "[OK] PASS" if actual_dept == expected_dept else "[FAIL]"
     
     if actual_dept == expected_dept:
         passed += 1
@@ -83,5 +83,5 @@ print("=" * 70)
 if failed > 0:
     print("\nFAILED TESTS:")
     for r in results:
-        if r["status"] == "✗ FAIL":
+        if r["status"] == "[FAIL]":
             print(f"  - '{r['complaint']}': Expected {r['expected']}, Got {r['actual']}")
