@@ -31,7 +31,8 @@ export default defineConfig(({ mode }) => ({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,ts,tsx}']
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,ts,tsx}'],
+        maximumFileSizeToCacheInBytes: 15 * 1024 * 1024 // 15MB to allow the 7.51MB rest-bg.png
       }
     })
   ].filter(Boolean),
