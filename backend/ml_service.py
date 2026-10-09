@@ -42,7 +42,8 @@ class TriageModel:
 
             # Reconstruct model architecture explicitly to avoid Keras 3 -> Keras 2 config incompatibilities
             self.model = tf.keras.Sequential([
-                tf.keras.layers.Dense(64, activation='relu', input_shape=(19,), name='dense'),
+                tf.keras.Input(shape=(19,)),
+                tf.keras.layers.Dense(64, activation='relu', name='dense'),
                 tf.keras.layers.Dropout(0.2, name='dropout'),
                 tf.keras.layers.Dense(64, activation='tanh', name='dense_1'),
                 tf.keras.layers.Dropout(0.3, name='dropout_1'),
@@ -114,6 +115,7 @@ class TriageModel:
                 "risk_score": 0.99,
                 "risk_label": "HIGH",
                 "details": "⚠️ Critical vitals detected (SAFETY OVERRIDE): " + ". ".join(critical_reasons) + ".",
+                "explainability": [{"feature": "Guardrail_Trigger", "contribution": "Critical", "value": "Override"}]
             }
 
         # --- Neural Network Prediction ---
@@ -171,26 +173,46 @@ class TriageModel:
 
         # Generate explanation
         details = []
+        explainability = []
+        
         if hr > 100:
             details.append("Elevated heart rate")
+            explainability.append({"feature": "Heart_Rate", "contribution": "High", "value": hr})
+        elif hr < 60:
+            explainability.append({"feature": "Heart_Rate", "contribution": "Low", "value": hr})
+            
         if systolic < 90:
             details.append("Low blood pressure")
+            explainability.append({"feature": "Systolic_BP", "contribution": "Low", "value": systolic})
+        elif systolic > 160:
+            explainability.append({"feature": "Systolic_BP", "contribution": "High", "value": systolic})
+            
         if o2 < 94:
             details.append("Low oxygen saturation")
+            explainability.append({"feature": "O2_Saturation", "contribution": "Low", "value": o2})
+            
         gcs = data.get("GCS_Score", 15)
         if gcs <= 12:
             details.append("Reduced consciousness (GCS ≤ 12)")
+            explainability.append({"feature": "GCS_Score", "contribution": "Low", "value": gcs})
+            
         temp = data.get("Temperature", 37)
         if temp > 39:
             details.append("Fever detected")
+            explainability.append({"feature": "Temperature", "contribution": "High", "value": temp})
+            
         pain = data.get("Pain_Score", 0)
         if pain >= 7:
             details.append("Significant pain reported")
+            explainability.append({"feature": "Pain_Score", "contribution": "High", "value": pain})
+            
         if not details:
             details.append("Vitals within acceptable range")
+            explainability.append({"feature": "All_Vitals", "contribution": "Normal", "value": "N/A"})
 
         return {
             "risk_score": round(risk_score, 4),
             "risk_label": risk_label,
             "details": ". ".join(details) + ".",
+            "explainability": explainability
         }

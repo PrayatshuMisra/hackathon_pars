@@ -3,7 +3,7 @@ PARS - FastAPI Backend
 Run with: uvicorn main:app --reload --port 8000
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -14,21 +14,15 @@ from doc_parser import extract_vitals_from_pdf
 from dept_service import get_referral, get_department
 import os
 import shutil
+import json
 
 app = FastAPI(title="PARS Triage API", version="1.0.0")
 
 # CORS - allow your Lovable frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=".*",
-    # allow_origins=[
-    #     "http://localhost:5173",
-    #     "http://localhost:3000",
-    #     "http://127.0.0.1:5173",
-    #     "http://127.0.0.1:3000",
-    #     "https://*.lovable.app",
-    # ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -105,6 +99,7 @@ class TriageResponse(BaseModel):
     risk_label: str
     details: str
     referral: Optional[Dict[str, Any]] = None
+    explainability: Optional[List[Dict[str, Any]]] = None
 
 
 @app.get("/")
@@ -117,56 +112,38 @@ def predict(patient: PatientInput):
     # Fallback mode: Use rule-based risk assessment if ML model isn't loaded
     if model is None:
         print("[PARS] WARNING: Using fallback mode (ML model not available)")
-        # Simple rule-based risk assessment
-        hr = patient.Heart_Rate
-        systolic = patient.Systolic_BP
-        o2 = patient.O2_Saturation
-        gcs = patient.GCS_Score
-        
-        # Determine risk based on continuous scoring
-        base_score = 0.05
+        # Load Clinical Rules Engine
+        try:
+            with open("clinical_rules.json", "r") as f:
+                rules_engine = json.load(f)
+        except Exception as e:
+            print(f"[PARS] Error loading rules: {e}")
+            rules_engine = {"base_score": 0.05, "rules": []}
+            
+        base_score = rules_engine.get("base_score", 0.05)
         penalties = 0.0
         details_list = []
         
-        # Heart Rate logic
-        if hr > 180 or hr < 40:
-            penalties += 0.60
-            details_list.append("Abnormal heart rate")
-        elif hr > 100:
-            penalties += min(0.30, (hr - 100) * 0.005)
-            details_list.append("Elevated heart rate")
-        elif hr < 60:
-            penalties += min(0.20, (60 - hr) * 0.01)
-            
-        # Blood pressure logic
-        if systolic < 70:
-            penalties += 0.60
-            details_list.append("Severe hypotension")
-        elif systolic < 90:
-            penalties += min(0.30, (90 - systolic) * 0.015)
-            details_list.append("Low blood pressure")
-        elif systolic > 160:
-            penalties += min(0.30, (systolic - 160) * 0.005)
-            details_list.append("High blood pressure")
-            
-        # Oxygen logic
-        if o2 < 85:
-            penalties += 0.60
-            details_list.append("Critical hypoxia")
-        elif o2 < 94:
-            penalties += min(0.30, (94 - o2) * 0.05)
-            details_list.append("Low oxygen saturation")
-            
-        # GCS logic
-        if gcs <= 8:
-            penalties += 0.80
-            details_list.append("Reduced consciousness")
-        elif gcs < 15:
-            penalties += min(0.40, (15 - gcs) * 0.05)
-            
-        # Age penalty
-        if patient.Age and patient.Age > 65:
-            penalties += min(0.15, (patient.Age - 65) * 0.005)
+        # Evaluate rules dynamically
+        for rule in rules_engine.get("rules", []):
+            metric_val = getattr(patient, rule["metric"], None)
+            if metric_val is None:
+                continue
+                
+            for cond in rule["conditions"]:
+                matched = False
+                op = cond["operator"]
+                val = cond["value"]
+                if op == ">" and metric_val > val: matched = True
+                elif op == ">=" and metric_val >= val: matched = True
+                elif op == "<" and metric_val < val: matched = True
+                elif op == "<=" and metric_val <= val: matched = True
+                elif op == "==" and metric_val == val: matched = True
+                
+                if matched:
+                    penalties += cond["penalty"]
+                    details_list.append(cond["detail"])
+                    break # Apply highest severity condition only (assuming they are ordered correctly, or just first match)
 
         # Calculate final continuous score
         risk_score = min(0.99, base_score + penalties)
@@ -180,15 +157,16 @@ def predict(patient: PatientInput):
             risk_label = "LOW"
             
         if not details_list:
-            details = "Vitals within acceptable range"
+            details = f"Vitals within acceptable range (Evaluated via {rules_engine.get('protocol', 'Standard Protocol')})"
         else:
-            prefix = "⚠️ Critical vitals detected: " if risk_label == "HIGH" else "Elevated vitals requiring attention: "
+            prefix = f"⚠️ Critical vitals detected (Evaluated via {rules_engine.get('protocol', 'Standard Protocol')}): " if risk_label == "HIGH" else "Elevated vitals requiring attention: "
             details = prefix + ", ".join(details_list)
         
         result = {
             "risk_score": risk_score,
             "risk_label": risk_label,
-            "details": details
+            "details": details,
+            "explainability": [{"feature": "Rule_Based", "contribution": "Fallback", "value": "No ML"}]
         }
     else:
         # Use ML model if available
@@ -229,7 +207,8 @@ def self_check_in(data: SelfCheckInInput):
         "risk_score": 0.1,
         "risk_label": "LOW",
         "details": f"Self check-in completed. Based on '{data.symptoms}', we recommend visiting {dept.replace('_', ' ')}.",
-        "referral": referral_data
+        "referral": referral_data,
+        "explainability": [{"feature": "Self_Check_In", "contribution": "Default", "value": "LOW"}]
     }
 
 @app.post("/parse-document")
@@ -272,6 +251,78 @@ async def transcribe_audio(file: UploadFile = File(...)):
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
 
+# --- MOCK FHIR INTEGRATION ---
+class FHIRPatient(BaseModel):
+    resourceType: str = "Patient"
+    name: List[Dict[str, Any]]
+    gender: str
+    birthDate: Optional[str] = None
+
+class FHIREncounter(BaseModel):
+    resourceType: str = "Encounter"
+    status: str
+    subject: Dict[str, str]
+    period: Dict[str, str]
+
+@app.post("/fhir/Patient")
+def create_fhir_patient(patient: FHIRPatient):
+    """
+    Mock FHIR Endpoint to demonstrate EMR integration (Epic/Cerner).
+    """
+    return {
+        "id": "mock-fhir-id-12345",
+        "resourceType": "Patient",
+        "status": "success",
+        "message": "Patient successfully synced to mock EMR via FHIR HL7."
+    }
+
+@app.post("/fhir/Encounter")
+def create_fhir_encounter(encounter: FHIREncounter):
+    """
+    Mock FHIR Endpoint for triage encounters.
+    """
+    return {
+        "id": "mock-encounter-id-67890",
+        "resourceType": "Encounter",
+        "status": "success",
+        "message": "Triage encounter recorded in mock EMR."
+    }
+
+# --- WEBSOCKETS FOR WEARABLE INTEGRATION ---
+active_dashboards = []
+
+@app.websocket("/ws/dashboard")
+async def dashboard_websocket(websocket: WebSocket):
+    """Frontend React dashboard connects here to listen for live vitals."""
+    await websocket.accept()
+    active_dashboards.append(websocket)
+    try:
+        while True:
+            # Keep connection open, waiting for dashboard to disconnect
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        active_dashboards.remove(websocket)
+
+@app.websocket("/ws/vitals/{patient_id}")
+async def wearable_stream(websocket: WebSocket, patient_id: str):
+    """The simulated wearable connects here and pushes vitals."""
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_json()
+            
+            # Broadcast to all connected dashboards
+            for dashboard in active_dashboards:
+                try:
+                    await dashboard.send_json({
+                        "patient_id": patient_id, 
+                        "vitals": data
+                    })
+                except Exception:
+                    # Ignore if dashboard drops connection midway
+                    pass
+    except WebSocketDisconnect:
+        print(f"[PARS] Wearable disconnected for patient {patient_id}")
 
 if __name__ == "__main__":
     import uvicorn
