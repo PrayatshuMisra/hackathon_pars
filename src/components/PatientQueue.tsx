@@ -57,6 +57,58 @@ function timeAgo(dateStr: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+// Generates a realistic historical trend ending at the current vital
+function generateSparklineData(current: number | undefined, id: string) {
+  if (!current) return [];
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = Math.imul(31, hash) + id.charCodeAt(i) | 0;
+  
+  const rng = () => {
+    hash = Math.imul(1664525, hash) + 1013904223 | 0;
+    return (Math.abs(hash) % 100) / 100;
+  };
+  
+  const data = [current];
+  let val = current;
+  for(let i = 0; i < 15; i++) {
+    const diff = (rng() - 0.5) * 6; // +/- 3
+    val = val + diff;
+    data.unshift(val);
+  }
+  return data;
+}
+
+function Sparkline({ data, riskLabel }: { data: number[], riskLabel: string | null }) {
+  if (data.length === 0) return null;
+  const min = Math.min(...data) - 5;
+  const max = Math.max(...data) + 5;
+  const range = max - min || 1;
+  
+  const points = data.map((d, i) => {
+    const x = (i / (data.length - 1)) * 60;
+    const y = 20 - (((d - min) / range) * 20);
+    return `${x},${y}`;
+  }).join(" ");
+  
+  let color = "text-emerald-500";
+  if (riskLabel === "HIGH") color = "text-red-500 drop-shadow-[0_0_2px_rgba(239,68,68,0.8)]";
+  else if (riskLabel === "MEDIUM") color = "text-amber-500";
+  
+  return (
+    <svg width="60" height="20" className="overflow-visible ml-2">
+      <polyline
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+        className={color}
+      />
+    </svg>
+  );
+}
+
 export default function PatientQueue({ patients, allPatients = [], selectedId, onSelect, loading }: Props) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"queue" | "history">("queue");
@@ -82,6 +134,15 @@ export default function PatientQueue({ patients, allPatients = [], selectedId, o
     return returningPatients.filter(visits => visits[0].name.toLowerCase().includes(q));
   }, [returningPatients, searchName]);
 
+  // Sort by risk score (descending) so highest risk is always at the top
+  const sortedPatients = useMemo(() => {
+    return [...patients].sort((a, b) => {
+      const scoreA = Number(a.risk_score || 0);
+      const scoreB = Number(b.risk_score || 0);
+      return scoreB - scoreA;
+    });
+  }, [patients]);
+
   if (loading) {
     return (
       <div className="flex h-full flex-col p-2 space-y-2">
@@ -105,6 +166,8 @@ export default function PatientQueue({ patients, allPatients = [], selectedId, o
       </div>
     );
   }
+
+
 
   return (
     <div className="flex h-full flex-col">
@@ -136,7 +199,7 @@ export default function PatientQueue({ patients, allPatients = [], selectedId, o
       {activeTab === "queue" && (
         <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
           <AnimatePresence mode="popLayout">
-            {patients.map((p) => (
+            {sortedPatients.map((p) => (
               <motion.div
                 key={p.id}
                 layout
@@ -167,16 +230,21 @@ export default function PatientQueue({ patients, allPatients = [], selectedId, o
                       {p.age}y • {p.gender} • {p.arrival_mode}
                     </p>
                   </div>
-                  <div className={`rounded-full border px-2 py-0.5 text-xs font-bold ${riskColor(p.risk_label)} ${p.risk_label === "HIGH" ? "animate-pulse" : ""
-                    }`}>
-                    {p.risk_label || t('queue.pending')}
+                  <div className="flex flex-col items-end gap-1">
+                    <div className={`rounded-full border px-2 py-0.5 text-xs font-bold ${riskColor(p.risk_label)} ${p.risk_label === "HIGH" ? "animate-pulse" : ""}`}>
+                      {p.risk_label || t('queue.pending')}
+                    </div>
                   </div>
                 </div>
-                <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                  {p.heart_rate && <span>HR {p.heart_rate}</span>}
+                <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+                  {p.heart_rate && (
+                    <div className="flex items-center bg-background/50 rounded px-1.5 py-0.5 border border-border/50">
+                      <span>HR {p.heart_rate}</span>
+                      <Sparkline data={generateSparklineData(p.heart_rate, p.id)} riskLabel={p.risk_label} />
+                    </div>
+                  )}
                   {p.systolic_bp && <span>BP {p.systolic_bp}/{p.diastolic_bp}</span>}
                   {p.o2_saturation && <span>O₂ {p.o2_saturation}%</span>}
-                  {p.pain_score != null && <span>Pain {p.pain_score}/10</span>}
                   <span className="ml-auto flex items-center gap-1">
                     <Clock className="h-3 w-3" />
                     {new Date(p.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

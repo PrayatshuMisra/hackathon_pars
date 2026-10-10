@@ -83,6 +83,9 @@ export default function Dashboard() {
   const [showArchitecture, setShowArchitecture] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [sortOrder, setSortOrder] = useState<"priority" | "recent" | "old">("priority");
+  
+  // Cache to store the full triage result (with doctors/explainability) per patient ID
+  const [resultsCache, setResultsCache] = useState<Record<string, ReturnType<typeof useTriage>['result']>>({});
 
   // Refs for logic
   const simActiveRef = useRef(false);
@@ -157,7 +160,9 @@ export default function Dashboard() {
       }
 
       if (newPatient) {
+        setResultsCache(prev => ({ ...prev, [newPatient.id]: triageResult }));
         if (!isAuto) setSelectedPatient(newPatient);
+        
         const rawDept = triageResult.referral?.department || "General Medicine";
         try {
           await supabase.from("patient_assignments").insert({
@@ -192,15 +197,8 @@ export default function Dashboard() {
   }, [simActive, handleSubmit]);
 
   const handleSelectPatient = (p: Patient) => {
-    if (p.risk_score != null && p.risk_label) {
-      setResult({
-        risk_score: Number(p.risk_score),
-        risk_label: p.risk_label,
-        details: p.explanation || "",
-      });
-      setSelectedPatient(p);
-      setActiveTab("analysis");
-    }
+    setSelectedPatient(p);
+    setActiveTab("analysis");
   };
 
   const changeLanguage = (lng: string) => {
@@ -230,6 +228,15 @@ export default function Dashboard() {
     else if (sortOrder === "recent") setSortOrder("old");
     else setSortOrder("priority");
   };
+
+  const activePatient = selectedPatient || sortedPatients[0];
+  const displayResult = activePatient ? (resultsCache[activePatient.id] || {
+    risk_score: activePatient.risk_score || 0,
+    risk_label: activePatient.risk_label || "LOW",
+    details: activePatient.explanation || "",
+    referral: { department: activePatient.department || "General_Medicine", doctors: [] },
+    explainability: []
+  }) : result;
 
   return (
     <div className="flex h-screen flex-col text-foreground font-sans selection:bg-primary/20 p-4 gap-4 overflow-hidden">
@@ -432,7 +439,7 @@ export default function Dashboard() {
                   <div className="flex flex-col h-full rounded-2xl glass-panel shadow-xl overflow-hidden transition-all">
                     <div className="flex-1 overflow-hidden relative rounded-2xl">
                       <div className="absolute inset-0">
-                        <RiskPanel result={result} patients={patients} apiError={error} selectedPatient={selectedPatient} loading={loading} />
+                        <RiskPanel result={displayResult} patients={patients} apiError={error} selectedPatient={selectedPatient} loading={loading} />
                       </div>
                     </div>
                   </div>
