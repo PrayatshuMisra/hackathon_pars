@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { SwipeToConfirm } from "@/components/ui/swipe-to-confirm";
 
 interface Props {
   result: TriageResult | null;
@@ -657,6 +658,22 @@ export default function RiskPanel({ result, patients, apiError, selectedPatient,
             <div className="flex flex-col items-center justify-center py-12 text-center opacity-30">
               <Siren className="mb-4 h-12 w-12 text-zinc-500" />
               <p className="text-sm font-mono text-zinc-500">{t('risk.awaiting_data')}</p>
+            </div>
+          )}
+
+          {/* Swipe Action Panel */}
+          {result && (
+            <div className="pt-8 pb-4">
+              <SwipeToConfirm 
+                onConfirm={() => console.log(`Patient ${activePatient.id} triage confirmed.`)}
+                themeColor={currentTheme.hex}
+                text={
+                  result.risk_label === 'HIGH' ? 'SWIPE TO ADMIT (ICU)' :
+                  result.risk_label === 'MEDIUM' ? 'SWIPE TO ASSIGN WARD' :
+                  'SWIPE TO DISCHARGE'
+                }
+                completedText="TRIAGE LOGGED"
+              />
             </div>
           )}
         </div>
